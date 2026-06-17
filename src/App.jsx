@@ -3030,10 +3030,78 @@ const migrateChild = (c) => ({
   dailyMemos: c.dailyMemos && typeof c.dailyMemos === "object" ? c.dailyMemos : {}
 });
 
+function ManualModal({ onClose }) {
+  const sec = (title, lines) => (
+    <section style={{ marginBottom: 20 }}>
+      <h3 style={{ fontSize: 15, color: "#D4728A", margin: "0 0 8px", fontWeight: 700 }}>{title}</h3>
+      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8, color: "#444" }}>
+        {lines.map((l, i) => <li key={i}>{l}</li>)}
+      </ul>
+    </section>
+  );
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 10002,
+      background: "rgba(0,0,0,0.45)",
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 20
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: "#fff", borderRadius: 14, padding: "28px 26px",
+        maxWidth: 560, width: "100%", maxHeight: "85vh", overflowY: "auto",
+        boxShadow: "0 10px 40px rgba(0,0,0,0.2)"
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+          <h2 style={{ fontSize: 18, color: "#D4728A", margin: 0, fontWeight: 800 }}>📖 사용설명서</h2>
+          <button onClick={onClose} style={{
+            border: "none", background: "#f3f3f3", borderRadius: 8,
+            width: 32, height: 32, fontSize: 16, cursor: "pointer", color: "#666"
+          }}>✕</button>
+        </div>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: "#333", marginBottom: 16 }}>
+          검단ABA 통합 시스템 사용설명서
+        </div>
+        {sec("1. 로그인", [
+          "인터넷 주소창에 사이트 주소를 입력하면 로그인 화면이 나옵니다.",
+          "관리자(센터장): 이름 칸에 '관리자' 입력 + 비밀번호",
+          "선생님: 본인 이름 입력 + 비밀번호",
+          "PC·태블릿·핸드폰 어디서든 같은 주소로 로그인할 수 있습니다."
+        ])}
+        {sec("2. 아동 등록", [
+          "로그인 후 새 아동을 등록합니다. 이름·생년월일·소속반·담당 치료사를 입력합니다.",
+          "선생님은 본인이 담당하는 아동만 보고 관리할 수 있습니다."
+        ])}
+        {sec("3. 평가 데이터 입력", [
+          "ELCAR / VB-MAPP / ESDM 세 가지 커리큘럼을 선택해 평가합니다.",
+          "각 영역의 현행 수준을 입력하면 기초선 그래프가 자동으로 그려집니다."
+        ])}
+        {sec("4. 보고서 자동 생성", [
+          "IEP(개별화 교육 계획) / 중간보고서 / 종결보고서를 자동으로 생성합니다.",
+          "각 영역 문장이 자동으로 채워지며, 필요하면 직접 수정할 수 있습니다.",
+          "수정한 내용은 자동 저장됩니다."
+        ])}
+        {sec("5. 인쇄 (PDF)", [
+          "완성된 보고서는 공문서 양식으로 인쇄하거나 PDF로 저장할 수 있습니다."
+        ])}
+        {sec("6. 데이터 저장", [
+          "입력한 모든 데이터는 클라우드에 자동 저장됩니다.",
+          "관리자는 모든 선생님의 아동을, 선생님은 본인 아동을 조회할 수 있습니다."
+        ])}
+        <div style={{
+          marginTop: 8, paddingTop: 14, borderTop: "1px solid #eee",
+          fontSize: 11, color: "#999", textAlign: "center"
+        }}>
+          © 검단ABA언어행동연구소 (민다혜). All rights reserved.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AuthScreen({ view, message, onSetupAdmin, onLogin }) {
   const [pw, setPw] = useState("");
   const [pwConfirm, setPwConfirm] = useState("");
   const [name, setName] = useState("");
+  const [showManual, setShowManual] = useState(false);
 
   const handleSubmit = () => {
     if (view === "setup") {
@@ -3183,7 +3251,17 @@ function AuthScreen({ view, message, onSetupAdmin, onLogin }) {
             ? "이 비밀번호는 이 브라우저에만 저장됩니다."
             : "관리자(센터장)는 이름 '관리자', 선생님은 본인 이름으로 로그인."}
         </div>
+        <div style={{ marginTop: 14, textAlign: "center" }}>
+          <button onClick={() => setShowManual(true)} style={{
+            border: "1px solid #F5A0B1", background: "#fff", color: "#D4728A",
+            borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer"
+          }}>📖 사용설명서</button>
+        </div>
+        <div style={{ marginTop: 12, fontSize: 10, color: "#bbb", textAlign: "center" }}>
+          © 검단ABA언어행동연구소 (민다혜). All rights reserved.
+        </div>
       </div>
+      {showManual && <ManualModal onClose={() => setShowManual(false)} />}
     </div>
   );
 }
@@ -5681,12 +5759,14 @@ export default function App() {
               title="PC에 저장해둔 백업 JSON 파일을 불러와 데이터를 복구합니다">
               📂 복원
             </button>
+            {false && (
             <button
               style={{ ...BS, borderColor: "#888", color: "#666" }}
               onClick={() => setShowBackupHistory(true)}
               title="최근 10회 백업 기록을 확인합니다">
               📜 기록
             </button>
+            )}
             {/* ★ [v19] 로그아웃 — 샌드박스 confirm 차단 대응으로 자체 모달 사용 */}
             <button
               style={{ ...BS, borderColor: "#aaa", color: "#888" }}
@@ -5766,6 +5846,7 @@ export default function App() {
 
         {/* ═══ 백업 알림 배너 ═══ */}
         {(() => {
+          return null; /* [숨김] 클라우드 자동저장 도입으로 백업 배너·자동백업·지금백업 버튼 숨김 (코드는 보존) */
           const needsBackup = lastChangeAt !== null && (lastBackupAt === null || lastBackupAt < lastChangeAt);
           if (!needsBackup) return null;
           const elapsedMs = now - lastChangeAt;
@@ -6796,7 +6877,7 @@ export default function App() {
             </div>
 
             {/* ★ [v19] 데이터 변경 이력 */}
-            {history && history.length > 0 && (
+            {false && history && history.length > 0 && (
               <div style={{ ...CS, background: "#f5f5f5", marginTop: 20, border: "1px solid #e0e0e0" }}>
                 <h3 style={{ fontSize: 13, fontWeight: 700, margin: 0, marginBottom: 12, color: "#555" }}>
                   📋 데이터 변경 이력 ({history.length}건)
@@ -15554,7 +15635,7 @@ function ReportGeneratorSection({
     setReportPatch({ reportSections: { ...reportSections, [key]: value } });
   };
 
-  const handleDownloadHtml = () => {
+  const handleDownloadHtml = (mode = "download") => {
     const sections = reportSections;
     if (!sections || Object.keys(sections).length === 0) {
       alert("먼저 [보고서 자동 생성] 버튼을 눌러 섹션을 만들어주세요.");
@@ -15637,6 +15718,27 @@ function ReportGeneratorSection({
 
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
+
+    if (mode === "print") {
+      // 🖨️ 새 창에 보고서를 띄우고 인쇄 대화상자를 자동으로 엽니다.
+      const win = window.open(url, "_blank");
+      if (!win) {
+        alert("팝업이 차단되어 있습니다. 브라우저의 팝업 차단을 해제한 뒤 다시 시도하거나,\n[💾 HTML 다운로드]로 저장 후 인쇄해주세요.");
+        URL.revokeObjectURL(url);
+        return;
+      }
+      const timer = setInterval(() => {
+        try {
+          if (win.document && win.document.readyState === "complete") {
+            clearInterval(timer);
+            setTimeout(() => { try { win.print(); } catch (e) {} }, 400);
+          }
+        } catch (e) { clearInterval(timer); }
+      }, 200);
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 60000);
+      return;
+    }
+
     const a = document.createElement("a");
     a.href = url;
     a.download = `검단ABA_중간보고서_${info.name || "아동"}_${today}.html`;
@@ -16048,8 +16150,14 @@ function ReportGeneratorSection({
           {loading ? "⏳ 생성 중..." : (hasReport ? "🔄 보고서 다시 생성" : "📝 보고서 자동 생성")}
         </button>
         {hasReport && (
+          <button style={{ ...BP, padding: "10px 18px", fontSize: 12, fontWeight: 700, background: "#5a8c1f" }}
+            onClick={() => handleDownloadHtml("print")}>
+            🖨️ 바로 인쇄
+          </button>
+        )}
+        {hasReport && (
           <button style={{ ...BS, padding: "10px 18px", fontSize: 12, fontWeight: 600 }}
-            onClick={handleDownloadHtml}>
+            onClick={() => handleDownloadHtml("download")}>
             💾 HTML 다운로드
           </button>
         )}
