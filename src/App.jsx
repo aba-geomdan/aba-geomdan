@@ -132,6 +132,7 @@ const SUPERVISOR_TITLE = "검단ABA언어행동연구소";
 const SUPERVISOR_CERT = "국제응용행동분석전문가 BCBA 1-21-55036";
 
 const REPORT_FOOTER = "검단ABA언어행동연구소. 본 보고서에 포함된 데이터 기반 분석은 아동의 발달적 진전을 확인하고 다음 단계의 중재 방향을 설정하는 데 활용됩니다.";
+const REPORT_COPYRIGHT = "© 검단ABA 언어행동연구소 · 민다혜 (BCBA)  |  본 자료는 검단ABA언어행동연구소의 지적재산입니다. 무단 복제·배포·재판매·온라인 게시를 엄격히 금지합니다.";
 const REPORT_STRATS = ["DTT","NET","PECS","Errorless Teaching","Shaping","Chaining","Prompting","Prompt Fading","Token Economy","FCT","Social Stories","Video Modeling","Extinction","DRO/DRA/DRI","NCR","Incidental Teaching"];
 const REPORT_PREIN = ["식품 강화제","장난감·선호 물건","감각 자극(시각·청각)","감각 자극(촉각·전정)","활동 강화제","사회적 접촉"];
 const REPORT_SREIN = ["토큰(스티커·코인)","칭찬·언어적 강화","하이파이브","활동 선택권","스크린 타임","성취감"];
@@ -697,6 +698,15 @@ const josa은는 = (w) => withParticle(w, "은", "는");
 const josa을를 = (w) => withParticle(w, "을", "를");
 const josa이가 = (w) => withParticle(w, "이", "가");
 const josa과와 = (w) => withParticle(w, "과", "와");
+// ★ 으로/로: 받침 없음 또는 받침이 'ㄹ'이면 "로", 그 외 받침은 "으로"
+const josa으로 = (w) => {
+  if (!w) return "로";
+  const last = w.charAt(w.length - 1);
+  const code = last.charCodeAt(0);
+  if (code < 0xAC00 || code > 0xD7A3) return "로";
+  const jong = (code - 0xAC00) % 28;
+  return (jong === 0 || jong === 8) ? "로" : "으로";
+};
 
 function personalizeText(text, childName) {
   if (!text) return text;
@@ -1805,16 +1815,33 @@ function buildEndReason(selected, info) {
   const descs = selected.map(l => KEY_DESC[l]).filter(Boolean);
   if (descs.length === 0) return "";
 
+  // ★ [버그수정] 각 사유는 "~하였고/~으며" 연결어미로 끝나서, 뒤에 "이러한 사유에 따라"가 붙으면
+  //    "...도달하였고 이러한 사유에 따라..."처럼 어색하게 이어짐. 마지막 사유는 종결어미로 닫아줌.
+  const closeClause = (s) => s
+    .replace(/하였고$/, "하였습니다")
+    .replace(/되었고$/, "되었습니다")
+    .replace(/어려워졌고$/, "어려워졌습니다")
+    .replace(/졌고$/, "졌습니다")
+    .replace(/하였으며$/, "하였습니다")
+    .replace(/되었으며$/, "되었습니다")
+    .replace(/이루어졌으며$/, "이루어졌습니다")
+    .replace(/시작하였으며$/, "시작하였습니다")
+    .replace(/었으며$/, "었습니다")
+    .replace(/았으며$/, "았습니다")
+    .replace(/으며$/, "습니다")
+    .replace(/하고$/, "했습니다")
+    .replace(/고$/, "습니다");
+
   const intro = `${fn}${은는(fn)} 본 치료의 종결에 이르기까지 다음과 같은 진행 사항이 확인되었습니다.`;
 
   let body;
   if (descs.length === 1) {
-    body = `${descs[0]} 이러한 사유로 본 치료를 종결하게 되었습니다.`;
+    body = `${closeClause(descs[0])} 이러한 진행에 따라 본 치료를 종결하게 되었습니다.`;
   } else if (descs.length === 2) {
-    body = `${descs[0]}, ${descs[1]} 이러한 사유에 따라 본 치료를 종결하게 되었습니다.`;
+    body = `${descs[0]}, ${closeClause(descs[1])} 이러한 진행에 따라 본 치료를 종결하게 되었습니다.`;
   } else {
     const front = descs.slice(0, -1).join(", ");
-    body = `${front}, 그리고 ${descs[descs.length - 1]} 이러한 사유에 따라 본 치료를 종결하게 되었습니다.`;
+    body = `${front}, 그리고 ${closeClause(descs[descs.length - 1])} 이러한 진행에 따라 본 치료를 종결하게 되었습니다.`;
   }
 
   const closing = `본 종결은 ${fn}의 다음 발달 단계로의 이행 시점에 해당하며, 본 치료 기간 동안의 협력에 감사드립니다.`;
@@ -3799,6 +3826,9 @@ export default function App() {
 
   // ★ [신규] 보관함 토글 — true면 아카이브된 아동도 함께 표시
   const [showArchived, setShowArchived] = useState(false);
+  const [dashFilter, setDashFilter] = useState("all"); // ★ 대시보드 카드 필터: all | active | terminated
+  const [expandedTeachers, setExpandedTeachers] = useState({}); // ★ 대시보드 선생님 펼침 상태 (기본 접힘)
+  const [openIepInfoSection, setOpenIepInfoSection] = useState(null); // ★ IEP 추가정보 아코디언 (한 번에 하나, 기본 전체 접힘)
 
   const visibleChildren = useMemo(() => {
     // 1) 권한 필터링
@@ -4076,6 +4106,17 @@ export default function App() {
 
   const [tab, setTab] = useState("dashboard"); // ★ [v19 신규] dashboard | info | iep | daily | report
   const [reportMode, setReportMode] = useState("interim");
+  // ★ [버그수정] 종결일(finalEndDate)이 설정된 아동은 보고서 종류를 자동으로 '종결'로 전환.
+  //    (사용자가 종결일만 입력하고 종결 토글을 안 눌러서, 인쇄 시 "중간보고서 저장"으로 뜨던 문제 해결)
+  //    종결일을 해제하면 다시 '중간'으로 돌아감.
+  useEffect(() => {
+    if (info?.finalEndDate && reportMode !== "final") {
+      setReportMode("final");
+    } else if (!info?.finalEndDate && reportMode === "final") {
+      setReportMode("interim");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [info?.finalEndDate, activeChildId]);
 
   const [curriculum, setCurriculum] = useState("ELCAR"); // "ELCAR" | "VB-MAPP" | "ESDM"
   const [selDomainIdx, setSelDomainIdx] = useState(0);
@@ -4087,6 +4128,8 @@ export default function App() {
   const [extForm, setExtForm] = useState({ source: "기타", domain: "", subDomain: "", item: "" });
 
   const [view, setView] = useState("edit"); // edit | print
+  // ★ 미리보기 화면 진입 시 자동으로 인쇄 대화상자를 띄울지 신호 ("" = 안 함 / "print" = 인쇄 / "pdf" = PDF 저장)
+  const [autoPrintAction, setAutoPrintAction] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -5412,7 +5455,8 @@ export default function App() {
       reportSelPrein={reportSelPrein} reportSelSrein={reportSelSrein} reportReinfSchedule={reportReinfSchedule}
       reportBehaviors={reportBehaviors} stosForReport={stosForReport} goalsForReport={goalsForReport}
       archiveList={effectiveArchiveList} dailyMemos={dailyMemos}
-      mode="iep" onBack={() => setView("edit")} />;
+      autoPrint={autoPrintAction} onAutoPrintDone={() => setAutoPrintAction("")}
+      mode="iep" onBack={() => { setAutoPrintAction(""); setView("edit"); }} />;
   }
   if (view === "print") {
     return <PrintView info={effectiveInfo} goals={includedGoals} domainAvgs={domainAvgs} domainLevelOverrides={domainLevelOverrides} reportSections={reportSections}
@@ -5420,7 +5464,8 @@ export default function App() {
       reportSelPrein={reportSelPrein} reportSelSrein={reportSelSrein} reportReinfSchedule={reportReinfSchedule}
       reportBehaviors={reportBehaviors} stosForReport={stosForReport} goalsForReport={goalsForReport}
       archiveList={effectiveArchiveList} dailyMemos={dailyMemos}
-      mode={reportMode === "final" ? "final" : "report"} onBack={() => setView("edit")} />;
+      autoPrint={autoPrintAction} onAutoPrintDone={() => setAutoPrintAction("")}
+      mode={reportMode === "final" ? "final" : "report"} onBack={() => { setAutoPrintAction(""); setView("edit"); }} />;
   }
 
   if (!loaded) {
@@ -6644,34 +6689,37 @@ export default function App() {
                     📥 CSV 다운로드
                   </button>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
-                  <div style={{ background: "#fdf8f9", padding: 16, borderRadius: 10, border: `1px solid ${PKL}` }}>
-                    <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>전체 아동</div>
-                    <div style={{ fontSize: 28, fontWeight: 700, color: PKD }}>{totalChildren}명</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+                  <div onClick={() => setDashFilter("all")} title="전체 아동 보기"
+                    style={{ background: "#fdf8f9", padding: "12px 14px", borderRadius: 10, border: `1px solid ${dashFilter === "all" ? PK : PKL}`, cursor: "pointer", outline: dashFilter === "all" ? `2px solid ${PK}` : "none", outlineOffset: -2, transition: "all 0.1s" }}>
+                    <div style={{ fontSize: 11.5, color: "#888", marginBottom: 3 }}>전체 아동</div>
+                    <div style={{ fontSize: 23, fontWeight: 700, color: PKD }}>{totalChildren}<span style={{ fontSize: 12, fontWeight: 600, color: "#bb9aa3", marginLeft: 1 }}>명</span></div>
                   </div>
-                  <div style={{ background: "#f0fff4", padding: 16, borderRadius: 10, border: "1px solid #d4f5e3" }}>
-                    <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>활동 중</div>
-                    <div style={{ fontSize: 28, fontWeight: 700, color: "#10b981" }}>{activeChildren}명</div>
+                  <div onClick={() => setDashFilter(f => f === "active" ? "all" : "active")} title="활동 중 아동만 보기"
+                    style={{ background: "#f0fff4", padding: "12px 14px", borderRadius: 10, border: "1px solid #d4f5e3", cursor: "pointer", outline: dashFilter === "active" ? "2px solid #10b981" : "none", outlineOffset: -2, transition: "all 0.1s" }}>
+                    <div style={{ fontSize: 11.5, color: "#888", marginBottom: 3 }}>활동 중</div>
+                    <div style={{ fontSize: 23, fontWeight: 700, color: "#10b981" }}>{activeChildren}<span style={{ fontSize: 12, fontWeight: 600, color: "#9ccbb4", marginLeft: 1 }}>명</span></div>
                   </div>
-                  <div style={{ background: "#fef3f2", padding: 16, borderRadius: 10, border: "1px solid #fed7d7" }}>
-                    <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>종료</div>
-                    <div style={{ fontSize: 28, fontWeight: 700, color: "#dc2626" }}>{terminatedChildren}명</div>
+                  <div onClick={() => setDashFilter(f => f === "terminated" ? "all" : "terminated")} title="종료 아동만 보기"
+                    style={{ background: "#fef3f2", padding: "12px 14px", borderRadius: 10, border: "1px solid #fed7d7", cursor: "pointer", outline: dashFilter === "terminated" ? "2px solid #dc2626" : "none", outlineOffset: -2, transition: "all 0.1s" }}>
+                    <div style={{ fontSize: 11.5, color: "#888", marginBottom: 3 }}>종료</div>
+                    <div style={{ fontSize: 23, fontWeight: 700, color: "#dc2626" }}>{terminatedChildren}<span style={{ fontSize: 12, fontWeight: 600, color: "#e0a0a0", marginLeft: 1 }}>명</span></div>
                   </div>
                   {/* ★ [신규] 보관 아동 카드 — 보관된 아동이 있을 때만 표시 */}
                   {archivedChildren > 0 && (
                     <div
                       onClick={() => setShowArchived(v => !v)}
-                      style={{ background: "#fff8e1", padding: 16, borderRadius: 10, border: "1px solid #ffe0b2", cursor: "pointer", transition: "transform 0.1s" }}
+                      style={{ background: "#fff8e1", padding: "12px 14px", borderRadius: 10, border: "1px solid #ffe0b2", cursor: "pointer", transition: "transform 0.1s" }}
                       onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; }}
                       onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; }}
                       title="클릭하면 '보관 아동 보기' 토글이 켜져요">
-                      <div style={{ fontSize: 12, color: "#888", marginBottom: 4, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ fontSize: 11.5, color: "#888", marginBottom: 3, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span>🗄️ 보관 아동</span>
-                        <span style={{ fontSize: 9.5, color: showArchived ? "#92400e" : "#aaa", fontWeight: 600 }}>
+                        <span style={{ fontSize: 9, color: showArchived ? "#92400e" : "#aaa", fontWeight: 600 }}>
                           {showArchived ? "표시 중" : "숨김"}
                         </span>
                       </div>
-                      <div style={{ fontSize: 28, fontWeight: 700, color: "#92400e" }}>{archivedChildren}명</div>
+                      <div style={{ fontSize: 23, fontWeight: 700, color: "#92400e" }}>{archivedChildren}<span style={{ fontSize: 12, fontWeight: 600, color: "#c9a878", marginLeft: 1 }}>명</span></div>
                     </div>
                   )}
                 </div>
@@ -6679,43 +6727,71 @@ export default function App() {
 
               {/* 선생님별 현황 */}
               <div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, marginBottom: 14, color: PKD }}>👥 선생님별 현황</h3>
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  {Object.values(teacherStats).map(teacher => {
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, marginBottom: 12, color: PKD }}>👥 선생님별 현황</h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {Object.values(teacherStats).map((teacher, tIdx) => {
                     // ★ [신규] 선생님별 활동/종료 아동 카운트
                     const activeCount = teacher.children.filter(c => !c.info?.finalEndDate).length;
                     const terminatedCount = teacher.children.filter(c => c.info?.finalEndDate).length;
+                    // ★ [3번] 필터에 맞는 아동이 없는 선생님은 숨김
+                    const matchCount = dashFilter === "active" ? activeCount : dashFilter === "terminated" ? terminatedCount : teacher.childCount;
+                    if (matchCount === 0) return null;
+                    // ★ 선생님별 색 자동 배정 (순환)
+                    const TEACHER_COLORS = [
+                      { bar: "#D4728A", tint: "#fdf8f9", edge: "#f0dfe4" },
+                      { bar: "#2a6cb2", tint: "#f7fafd", edge: "#dde7f1" },
+                      { bar: "#4a7316", tint: "#f9fbf6", edge: "#dde9d0" },
+                      { bar: "#7c5bbd", tint: "#faf8fd", edge: "#e3dcef" },
+                      { bar: "#0e8a8a", tint: "#f5fbfb", edge: "#cfe9e9" },
+                      { bar: "#c2660c", tint: "#fdf9f4", edge: "#f0e2cf" }
+                    ];
+                    const tc = TEACHER_COLORS[tIdx % TEACHER_COLORS.length];
+                    const isExpanded = !!expandedTeachers[teacher.name];
+                    // ★ 밀림 아동 수 (활동중 + 최근입력 14일↑)
+                    const staleCount = teacher.children.filter(c => {
+                      if (c.info?.finalEndDate) return false;
+                      let last = null;
+                      (c.goals || []).filter(g => g.includeInIep).forEach(g => (g.tasks || []).forEach(t => {
+                        Object.keys(t.daily || {}).forEach(d => { if (!last || d > last) last = d; });
+                      }));
+                      if (!last) return false;
+                      return Math.floor((Date.now() - new Date(last).getTime()) / 86400000) >= 14;
+                    }).length;
                     return (
-                    <div key={teacher.name} style={{ background: "#fdf8f9", padding: 16, borderRadius: 10, border: `1px solid ${PKL}` }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: "#333" }}>👨‍🏫 {teacher.name}</div>
-                          <div style={{ fontSize: 12, color: "#888", marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                            <span>아동 {teacher.childCount}명</span>
-                            {activeCount > 0 && (
-                              <span style={{ fontSize: 10.5, padding: "1px 7px", borderRadius: 8, background: "#d1fae5", color: "#065f46", fontWeight: 600 }}>
-                                활동 {activeCount}
-                              </span>
-                            )}
-                            {terminatedCount > 0 && (
-                              <span style={{ fontSize: 10.5, padding: "1px 7px", borderRadius: 8, background: "#fee2e2", color: "#991b1b", fontWeight: 600 }}>
-                                종료 {terminatedCount}
-                              </span>
-                            )}
-                            <span style={{ color: "#bbb" }}>·</span>
-                            <span>목표 {teacher.totalGoals}개</span>
-                          </div>
+                    <div key={teacher.name} style={{ background: "#fff", borderRadius: 10, border: `1px solid ${tc.edge}`, borderLeft: `6px solid ${tc.bar}`, overflow: "hidden" }}>
+                      <div
+                        role="button" tabIndex={0}
+                        onClick={() => setExpandedTeachers(prev => ({ ...prev, [teacher.name]: !prev[teacher.name] }))}
+                        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedTeachers(prev => ({ ...prev, [teacher.name]: !prev[teacher.name] })); } }}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 14px", cursor: "pointer", background: isExpanded ? tc.tint : "#fff" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 700, color: "#333", whiteSpace: "nowrap" }}>👨‍🏫 {teacher.name}</span>
+                          <span style={{ fontSize: 10.5, color: "#999", whiteSpace: "nowrap" }}>아동 {teacher.childCount} · 목표 {teacher.totalGoals}</span>
+                          {activeCount > 0 && (
+                            <span style={{ fontSize: 9.5, padding: "1px 7px", borderRadius: 8, background: "#d1fae5", color: "#065f46", fontWeight: 600, whiteSpace: "nowrap" }}>활동 {activeCount}</span>
+                          )}
+                          {terminatedCount > 0 && (
+                            <span style={{ fontSize: 9.5, padding: "1px 7px", borderRadius: 8, background: "#fee2e2", color: "#991b1b", fontWeight: 600, whiteSpace: "nowrap" }}>종료 {terminatedCount}</span>
+                          )}
+                          {staleCount > 0 && (
+                            <span title={`${staleCount}명 데이터 14일 이상 밀림`} style={{ fontSize: 9.5, padding: "1px 7px", borderRadius: 8, background: "#fef3c7", color: "#92400e", fontWeight: 700, whiteSpace: "nowrap" }}>⚠ 밀림 {staleCount}</span>
+                          )}
                         </div>
-                        {teacher.lastDataDate && (
-                          <div style={{ fontSize: 11, color: "#888", textAlign: "right" }}>
-                            최근 입력<br/>{teacher.lastDataDate}
-                          </div>
-                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, whiteSpace: "nowrap" }}>
+                          {teacher.lastDataDate && (
+                            <span style={{ fontSize: 10, color: "#aaa" }}>{teacher.lastDataDate.slice(5)}</span>
+                          )}
+                          <span style={{ fontSize: 13, color: "#bbb" }}>{isExpanded ? "▾" : "▸"}</span>
+                        </div>
                       </div>
-                      
-                      {/* 아동별 상세 */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${PKL}` }}>
-                        {teacher.children.map(child => {
+
+                      {/* 아동별 상세 — 펼침 시에만 */}
+                      {isExpanded && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "0 14px 12px", borderTop: `1px solid ${tc.edge}` }}>
+                        <div style={{ height: 2 }} />
+                        {teacher.children
+                          .filter(child => dashFilter === "all" ? true : dashFilter === "active" ? !child.info?.finalEndDate : !!child.info?.finalEndDate)
+                          .map(child => {
                           const goals = (child.goals || []).filter(g => g.includeInIep);
                           const dailyGoals = goals.filter(g => (g.tasks || []).some(t => t.showInDaily && t.isActive));
                           const isTerminated = !!child.info?.finalEndDate;  // ★ [신규] 종료 여부
@@ -6726,23 +6802,29 @@ export default function App() {
                           dailyGoals.forEach(g => {
                             (g.tasks || []).forEach(t => {
                               const dates = Object.keys(t.daily || {});
-                              if (dates.length > 0) {
-                                const maxDate = dates[dates.length - 1];
-                                if (!latestDate || maxDate > latestDate) latestDate = maxDate;
-                                
-                                const records = t.daily[maxDate] || [];
-                                records.forEach(r => {
-                                  totalCount++;
-                                  if (r === "○") correctCount++;
-                                });
-                              }
+                              if (dates.length === 0) return;
+                              const maxDate = dates.sort()[dates.length - 1];
+                              if (!latestDate || maxDate > latestDate) latestDate = maxDate;
+                              // ★ [버그수정] 데이터 구조는 { trials: ["+","-",...] }. 기존 ○ 비교는 항상 0 → 정반응률 오류.
+                              //    CSV 다운로드와 동일하게 trials의 +/- 로 전체 기간 정반응률 계산.
+                              Object.values(t.daily || {}).forEach(day => {
+                                if (Array.isArray(day?.trials)) {
+                                  day.trials.forEach(x => {
+                                    if (x === "+") { correctCount++; totalCount++; }
+                                    else if (x === "-") { totalCount++; }
+                                  });
+                                }
+                              });
                             });
                           });
-                          
+
                           const percentage = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : null;
+                          // ★ [2번] 최근 입력일이 오래됐는지 — 14일 이상이면 "밀림" 경고
+                          const daysSinceData = latestDate ? Math.floor((Date.now() - new Date(latestDate).getTime()) / 86400000) : null;
+                          const isStale = !isTerminated && daysSinceData !== null && daysSinceData >= 14;
                           
                           return (
-                            <div key={child.id} style={{ background: isTerminated ? "#fafafa" : "#fff", padding: 10, borderRadius: 8, border: `1px solid ${isTerminated ? "#e5e5e5" : "#f0e0e5"}`, fontSize: 12, opacity: isTerminated ? 0.85 : 1 }}>
+                            <div key={child.id} style={{ background: isTerminated ? "#fafafa" : "#fdfdfd", padding: "8px 10px", borderRadius: 7, border: `1px solid ${isTerminated ? "#e5e5e5" : "#f0e0e5"}`, fontSize: 12, opacity: isTerminated ? 0.85 : 1 }}>
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ fontWeight: 600, color: "#333", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -6755,6 +6837,11 @@ export default function App() {
                                     ) : (
                                       <span style={{ fontSize: 9.5, padding: "1px 6px", borderRadius: 6, background: "#d1fae5", color: "#065f46", fontWeight: 700 }}>
                                         활동 중
+                                      </span>
+                                    )}
+                                    {isStale && (
+                                      <span title={`마지막 데이터 입력이 ${daysSinceData}일 전입니다`} style={{ fontSize: 9.5, padding: "1px 6px", borderRadius: 6, background: "#fef3c7", color: "#92400e", fontWeight: 700 }}>
+                                        ⚠ {daysSinceData}일 밀림
                                       </span>
                                     )}
                                   </div>
@@ -6772,6 +6859,9 @@ export default function App() {
                                         {percentage}%
                                       </div>
                                       <div style={{ fontSize: 10, color: "#888" }}>({correctCount}/{totalCount})</div>
+                                      {latestDate && (
+                                        <div style={{ fontSize: 9.5, color: isStale ? "#b45309" : "#bbb", marginTop: 1 }}>{latestDate.slice(5)} 입력</div>
+                                      )}
                                     </>
                                   ) : (
                                     <div style={{ fontSize: 11, color: "#bbb" }}>데이터 없음</div>
@@ -6782,6 +6872,7 @@ export default function App() {
                           );
                         })}
                       </div>
+                      )}
                     </div>
                     );
                   })}
@@ -6807,14 +6898,14 @@ export default function App() {
                     addHistory("info_update", `아동 이름 변경: "${oldName}" → "${newName}"`, oldName, newName, "name");
                   }
                 }} placeholder="예: 조은우" /></div>
-                <div><label style={LS}>생년월일</label><input style={IS} value={info.birth} onChange={e => {
+                <div><label style={LS}>생년월일</label><input style={IS} type="date" value={info.birth} onChange={e => {
                   const newBirth = e.target.value;
                   const oldBirth = info.birth;
                   setInfo(p => ({ ...p, birth: newBirth }));
                   if (newBirth !== oldBirth) {
                     addHistory("info_update", `생년월일 변경: "${oldBirth}" → "${newBirth}"`, oldBirth, newBirth, "birth");
                   }
-                }} placeholder="예: 2020년 04월 23일" /></div>
+                }} /></div>
                 <div><label style={LS}>소속반</label><input style={IS} value={info.room} onChange={e => {
                   const newRoom = e.target.value;
                   const oldRoom = info.room;
@@ -6930,9 +7021,9 @@ export default function App() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, fontSize: 11, color: "#555", lineHeight: 1.7 }}>
                 {[
                   { n: "①", t: "아동정보", d: "이름·생년월일·담당 치료사 등 기본 정보를 입력합니다." },
-                  { n: "②", t: "IEP 설정", d: "커리큘럼에서 [IEP 포함] 스위치로 목표를 선정하고, 영역별 현행 수준을 편집합니다." },
-                  { n: "③", t: "데일리 데이터", d: "매 세션마다 +/- 버튼으로 정·오반응 개수를 기록합니다." },
-                  { n: "④", t: "중간보고서", d: "성장 그래프가 자동 생성되고 PDF 양식으로 인쇄합니다." }
+                  { n: "②", t: "IEP 설정", d: "커리큘럼에서 목표를 선정하고 영역별 현행 수준을 작성합니다. IEP 계획안 인쇄·PDF 저장도 이 탭에서 합니다." },
+                  { n: "③", t: "데일리 데이터", d: "시트 스위치로 데일리에 올릴 목표를 켜고, 매 세션 +/- 버튼으로 정·오반응을 기록합니다." },
+                  { n: "④", t: "중간·종결 보고서", d: "성장 그래프가 자동 생성되며, 중간보고서와 종결보고서를 인쇄·PDF로 저장합니다." }
                 ].map(s => (
                   <div key={s.n} style={{ background: "#fff", padding: "10px 12px", borderRadius: 8, border: `1px solid ${PKL}` }}>
                     <div style={{ fontSize: 18, color: PK, fontWeight: 700, marginBottom: 4 }}>{s.n}</div>
@@ -6944,7 +7035,7 @@ export default function App() {
             </div>
 
             <div style={{ marginTop: 16, padding: "10px 14px", background: "#fff", borderRadius: 10, fontSize: 11, color: "#767676", lineHeight: 1.7, border: `1px solid ${PKL}` }}>
-              💾 모든 데이터는 자동으로 저장되며, 새로고침이나 재시작 후에도 복원됩니다. 하나의 통합 데이터(`goals` 배열)로 IEP · 데일리 · 보고서가 유기적으로 연결됩니다.
+              💾 모든 데이터는 자동으로 저장되며, 새로고침이나 재시작 후에도 복원됩니다. 아동정보 · IEP · 데일리 · 보고서가 하나로 연결돼 있어, 한 곳을 수정하면 전체에 반영됩니다.
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
@@ -7085,11 +7176,29 @@ export default function App() {
                       setInfo(prev => ({ ...prev, [sec.key]: "" }));
                     };
 
+                    const isOpen = openIepInfoSection === sec.key;
+                    const hasContent = visibleText.trim().length > 0;
+
                     return (
-                      <div key={sec.key} style={{ marginBottom: 16, paddingBottom: 14, borderBottom: "1px dashed #f0e0e5" }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: PKD, marginBottom: 6 }}>
-                          {sec.emoji} {sec.title} <span style={{ fontSize: 9.5, fontWeight: 400, color: "#888" }}>({sec.hint})</span>
+                      <div key={sec.key} style={{ marginBottom: 8, border: `1px solid ${hasContent ? PK : "#f0e0e5"}`, borderRadius: 8, overflow: "hidden", background: "#fff" }}>
+                        <div
+                          role="button" tabIndex={0}
+                          onClick={() => setOpenIepInfoSection(isOpen ? null : sec.key)}
+                          onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpenIepInfoSection(isOpen ? null : sec.key); } }}
+                          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", cursor: "pointer", background: isOpen ? PKL : "#fff" }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: PKD }}>
+                            {sec.emoji} {sec.title}
+                            {!isOpen && <span style={{ fontSize: 9.5, fontWeight: 400, color: "#aaa", marginLeft: 6 }}>{sec.hint}</span>}
+                          </span>
+                          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 9.5, fontWeight: 600, padding: "1px 7px", borderRadius: 8, background: hasContent ? "#eaf3de" : "#f3f3f3", color: hasContent ? "#4a7316" : "#aaa" }}>
+                              {hasContent ? "작성됨" : "비어 있음"}
+                            </span>
+                            <span style={{ fontSize: 12, color: "#bbb" }}>{isOpen ? "▾" : "▸"}</span>
+                          </span>
                         </div>
+                        {isOpen && (
+                        <div style={{ padding: "10px 12px", borderTop: `1px solid ${PKL}` }}>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 7 }}>
                           {sec.chips.map(([label], i) => {
                             const isSel = selectedSet.has(label);
@@ -7148,6 +7257,8 @@ export default function App() {
                           rows={Math.min(8, Math.max(3, (visibleText || "").split("\n").length + 1))}
                           style={{ width: "100%", padding: "8px 10px", border: "1px solid #e8d0d6", borderRadius: 6, fontSize: 11, fontFamily: "inherit", lineHeight: 1.7, resize: "vertical", boxSizing: "border-box" }}
                         />
+                        </div>
+                        )}
                       </div>
                     );
                   })}
@@ -7360,17 +7471,16 @@ export default function App() {
               )}
             </div>
 
-            {/* ═ 커리큘럼 카테고리 탭 (ELCAR / VB-MAPP / ESDM) ═ */}
-            <div style={{ ...CS, paddingBottom: 12, marginBottom: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0, color: PKD }}>📚 커리큘럼 선택</h3>
-                <div style={{ fontSize: 11, color: "#767676" }}>3가지 커리큘럼을 자유롭게 전환하며 목표를 선택할 수 있습니다</div>
+            {/* ═ 커리큘럼 카테고리 탭 (ELCAR / VB-MAPP / ESDM) — 컴팩트 ═ */}
+            <div style={{ ...CS, paddingBottom: 10, marginBottom: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: PKD }}>📚 커리큘럼</h3>
               </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {[
-                  { k: "ELCAR", label: "ELCAR", desc: "언어행동 커리큘럼", colorBg: PK, colorLight: PKL, colorText: PKD },
-                  { k: "VB-MAPP", label: "VB-MAPP", desc: "언어행동 평가·배치", colorBg: "#2a6cb2", colorLight: "#e6f1fb", colorText: "#2a6cb2" },
-                  { k: "ESDM", label: "ESDM", desc: "조기중재 발달모델", colorBg: "#4a7316", colorLight: "#eaf3de", colorText: "#4a7316" }
+                  { k: "ELCAR", label: "ELCAR", colorBg: PK, colorLight: PKL, colorText: PKD },
+                  { k: "VB-MAPP", label: "VB-MAPP", colorBg: "#2a6cb2", colorLight: "#e6f1fb", colorText: "#2a6cb2" },
+                  { k: "ESDM", label: "ESDM", colorBg: "#4a7316", colorLight: "#eaf3de", colorText: "#4a7316" }
                 ].map(c => {
                   const isActive = curriculum === c.k;
                   const catalog = c.k === "ELCAR" ? ELCAR : c.k === "VB-MAPP" ? VBMAPP_DOMAINS : ESDM_DOMAINS;
@@ -7378,33 +7488,29 @@ export default function App() {
                   const iepInCat = goals.filter(g => g.source === c.k && g.includeInIep).length;
                   return (
                     <button key={c.k} onClick={() => setCurriculum(c.k)}
+                      title={`IEP에 포함된 ${iepInCat}개 / ${c.label} 전체 ${totalInCatalog}개 항목`}
                       style={{
-                        flex: "1 1 180px",
-                        padding: "12px 16px",
-                        border: `2px solid ${isActive ? c.colorBg : "#e8d0d6"}`,
-                        borderRadius: 12,
+                        flex: "1 1 140px",
+                        padding: "8px 14px",
+                        border: `1.5px solid ${isActive ? c.colorBg : "#e8d0d6"}`,
+                        borderRadius: 10,
                         background: isActive ? c.colorBg : "#fff",
                         color: isActive ? "#fff" : c.colorText,
                         cursor: "pointer",
                         fontFamily: "inherit",
-                        textAlign: "left",
                         transition: "all 0.15s ease",
-                        display: "flex", alignItems: "center", gap: 10
+                        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8
                       }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.3px" }}>{c.label}</div>
-                        <div style={{ fontSize: 10, marginTop: 2, opacity: isActive ? 0.9 : 0.65 }}>{c.desc}</div>
-                      </div>
+                      <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-0.3px" }}>{c.label}</span>
                       <span
-                        title={`IEP에 포함된 ${iepInCat}개 / ${c.label} 전체 ${totalInCatalog}개 항목`}
                         style={{
                           display: "inline-flex", alignItems: "baseline",
-                          padding: "3px 10px", borderRadius: 10,
+                          padding: "2px 8px", borderRadius: 9,
                           background: isActive ? "rgba(255,255,255,0.25)" : c.colorLight,
                           color: isActive ? "#fff" : c.colorText
                         }}>
-                        <span style={{ fontSize: 14, fontWeight: 700 }}>{iepInCat}</span>
-                        <span style={{ fontSize: 10, fontWeight: 500, opacity: 0.7, marginLeft: 1 }}>/{totalInCatalog}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700 }}>{iepInCat}</span>
+                        <span style={{ fontSize: 9.5, fontWeight: 500, opacity: 0.7, marginLeft: 1 }}>/{totalInCatalog}</span>
                       </span>
                     </button>
                   );
@@ -7623,18 +7729,19 @@ export default function App() {
                 {/* DomainLevelEditor 컴포넌트 정의는 호환성을 위해 남겨둠 */}
 
                 {/* ═ 섹션 C: 초기 관찰 기록 (IEP 평가 결과 및 현행 수준) ═ */}
-                <div style={{ ...CS, marginTop: 14, padding: 18, border: `2px solid ${PK}`, borderRadius: 12, background: "#fff" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, paddingBottom: 12, borderBottom: `2px dashed ${PK}` }}>
-                    <div style={{ width: 5, height: 28, background: PKD, borderRadius: 3 }} />
-                    <div style={{ flex: 1 }}>
-                      <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: PKD, letterSpacing: "-0.3px" }}>
-                        🔍 초기 관찰 기록 (IEP 평가 결과 및 현행 수준)
-                      </h3>
-                      <div style={{ fontSize: 12, color: "#777", marginTop: 4, lineHeight: 1.6 }}>
-                        평가 회기에서 관찰한 아동의 현재 수행을 6개 카테고리로 작성합니다. <b style={{ color: PKD }}>3단계 버튼 클릭 시 예시 문구가 자동 입력</b>되며, 직접 수정도 가능합니다.
+                <div style={{ ...CS, marginTop: 14, padding: 14, border: `1px solid ${PK}`, borderRadius: 10, background: "#fff" }}>
+                  {(() => {
+                    const _cats = ["eyeContact", "requesting", "following", "attention", "imitation", "selfCare"];
+                    const _obs = info.iepObservations || {};
+                    const _filled = _cats.filter(k => (_obs[k] || "").trim() !== "").length;
+                    return (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                        <h3 style={{ fontSize: 13, fontWeight: 700, margin: 0, color: PKD }}>🔍 초기 관찰 기록</h3>
+                        <span style={{ fontSize: 9.5, fontWeight: 600, padding: "1px 8px", borderRadius: 8, background: _filled === 6 ? "#eaf3de" : "#fdf0f4", color: _filled === 6 ? "#4a7316" : PKD }}>{_filled}/6 작성됨</span>
+                        <span style={{ fontSize: 10, color: "#999" }}>3단계 버튼 클릭 시 예시 문구 자동 입력 · 직접 수정 가능</span>
                       </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   {(() => {
                     const categories = [
@@ -7710,7 +7817,7 @@ export default function App() {
                         </div>
 
                         {/* 6개 카테고리 카드 (2x3) */}
-                        <div className="responsive-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                        <div className="responsive-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                           {categories.map(c => {
                             const value = obs[c.key] || "";
                             const filled = value.trim() !== "";
@@ -7770,7 +7877,7 @@ export default function App() {
                                   onChange={e => updateObs(c.key, e.target.value)}
                                   readOnly={!unlocked}
                                   placeholder="3단계 버튼을 누르면 예시 문구가 자동 입력됩니다. 직접 입력·수정은 [✏️ 클릭하여 수정] 버튼을 눌러주세요."
-                                  rows={5}
+                                  rows={4}
                                   style={{
                                     width: "100%",
                                     border: "none",
@@ -7885,10 +7992,10 @@ export default function App() {
                 disabled={includedGoals.length === 0}>
                 👁 미리보기
               </button>
-              <button style={{ ...BP, padding: "10px 22px", fontSize: 13, fontWeight: 700 }}
-                onClick={() => {
+              {(() => {
+                const runIepOutput = (action) => {
                   if (includedGoals.length === 0) return;
-                  const confirmIepMsg = `📋 IEP 계획안 인쇄하기\n\n다음 작업이 자동으로 진행됩니다:\n  ✓ IEP 계획안이 보관함에 저장됨\n  ✓ 인쇄 미리보기 화면으로 이동\n\n진행하시겠습니까?\n\n(보관 없이 양식만 보려면 [👁 미리보기]를 사용하세요)`;
+                  const confirmIepMsg = `📋 IEP 계획안 ${action === "pdf" ? "PDF로 저장" : "인쇄"}하기\n\n다음 작업이 자동으로 진행됩니다:\n  ✓ IEP 계획안이 보관함에 저장됨\n  ✓ ${action === "pdf" ? "PDF 저장" : "인쇄"} 화면이 바로 열림\n\n진행하시겠습니까?\n\n(보관 없이 양식만 보려면 [👁 미리보기]를 사용하세요)`;
                   askConfirm(confirmIepMsg, async () => {
                     try {
                       if (!activeChildId || !info?.name?.trim()) {
@@ -7902,12 +8009,27 @@ export default function App() {
                     } catch (e) {
                       console.error("[IEP 보관 오류 - 인쇄는 진행]", e);
                     }
+                    setAutoPrintAction(action);
                     setView("iep-print");
                   });
-                }}
-                disabled={includedGoals.length === 0}>
-                🖨 IEP 계획안 인쇄
-              </button>
+                };
+                return (
+                  <>
+                    <button style={{ ...BP, padding: "10px 18px", fontSize: 13, fontWeight: 700 }}
+                      onClick={() => runIepOutput("print")}
+                      disabled={includedGoals.length === 0}
+                      title="보관 후 인쇄 대화상자가 바로 열립니다">
+                      🖨️ 인쇄
+                    </button>
+                    <button style={{ ...BP, padding: "10px 18px", fontSize: 13, fontWeight: 700 }}
+                      onClick={() => runIepOutput("pdf")}
+                      disabled={includedGoals.length === 0}
+                      title="보관 후 PDF 저장 화면이 바로 열립니다">
+                      📄 PDF로 저장
+                    </button>
+                  </>
+                );
+              })()}
             </div>
 
             {/* ★ [IEP 신규] IEP 보관함 — 이전 IEP 계획안 비교 */}
@@ -7928,214 +8050,7 @@ export default function App() {
               setCutoffDisabled={() => {}}
             />
 
-            {/* ★ [v19 신규] 목표 템플릿 라이브러리 */}
-            <div style={{ ...CS, background: "#f9f5f7", marginTop: 18, border: `1px solid ${PKL}` }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: PKD, marginBottom: 12 }}>📋 목표 템플릿 라이브러리</div>
-              
-              {/* 템플릿 탭 */}
-              <div style={{ display: "flex", gap: 8, marginBottom: 12, borderBottom: `1px solid ${PKL}`, paddingBottom: 10 }}>
-                <button
-                  onClick={() => setTemplateTab("popular")}
-                  style={{
-                    fontSize: 11,
-                    padding: "6px 12px",
-                    background: templateTab === "popular" ? "#fff" : "transparent",
-                    border: templateTab === "popular" ? `1px solid ${PKL}` : "none",
-                    borderRadius: 6,
-                    fontWeight: templateTab === "popular" ? 600 : 500,
-                    color: templateTab === "popular" ? PKD : "#888",
-                    cursor: "pointer"
-                  }}
-                >
-                  ⭐ 자주 쓰는 목표
-                </button>
-                <button
-                  onClick={() => setTemplateTab("my")}
-                  style={{
-                    fontSize: 11,
-                    padding: "6px 12px",
-                    background: templateTab === "my" ? "#fff" : "transparent",
-                    border: templateTab === "my" ? `1px solid ${PKL}` : "none",
-                    borderRadius: 6,
-                    fontWeight: templateTab === "my" ? 600 : 500,
-                    color: templateTab === "my" ? PKD : "#888",
-                    cursor: "pointer"
-                  }}
-                >
-                  🏷️ 마이 템플릿
-                </button>
-              </div>
-
-              {/* 템플릿 그리드 */}
-              {(() => {
-                const popularCategories = ["기본", "행동", "생활", "사회"];
-                const filtered = templateTab === "popular"
-                  ? templateLibrary.filter(t => popularCategories.includes(t.category))
-                  : templateLibrary.filter(t => t.category === "마이");
-
-                if (templateTab === "my" && filtered.length === 0) {
-                  return (
-                    <div style={{ padding: "32px 14px", textAlign: "center", border: `1px dashed ${PKL}`, borderRadius: 6, background: "#fff", marginBottom: 12 }}>
-                      <div style={{ fontSize: 13, color: "#888", marginBottom: 8 }}>🏷️ 마이 템플릿이 비어있습니다</div>
-                      <div style={{ fontSize: 11, color: "#aaa", lineHeight: 1.6 }}>
-                        자주 사용하는 목표를 마이 템플릿에 저장해 두면<br/>
-                        다음 아동의 IEP 작성 시 빠르게 재사용할 수 있습니다.
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setTemplateModal({ name: "", description: "", domain: "발달 언어" });
-                        }}
-                        style={{
-                          marginTop: 14,
-                          fontSize: 11,
-                          padding: "8px 16px",
-                          background: PK,
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: 4,
-                          cursor: "pointer",
-                          fontWeight: 600
-                        }}
-                      >
-                        + 새 템플릿 만들기
-                      </button>
-                    </div>
-                  );
-                }
-
-                return (
-                  <>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10, marginBottom: 12 }}>
-                      {filtered.map(template => (
-                        <div key={template.id} style={{
-                          background: "#fff",
-                          padding: 12,
-                          borderRadius: 8,
-                          border: `1px solid ${PKL}`,
-                          transition: "all 0.2s",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 6
-                        }}
-                          onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 4px 12px rgba(212,114,138,0.2)"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; }}
-                        >
-                          <div style={{ fontSize: 13, fontWeight: 700, color: "#333" }}>
-                            {template.name}
-                          </div>
-                          <div style={{ fontSize: 10, color: "#888", lineHeight: 1.4 }}>
-                            {template.description}
-                          </div>
-                          <div style={{ fontSize: 9, color: "#aaa", marginTop: "auto" }}>
-                            {template.domain}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              const newGoal = {
-                                id: "g_" + Date.now(),
-                                domain: template.domain,
-                                name: template.name,
-                                description: template.description,
-                                includeInIep: true,
-                                tasks: [{
-                                  id: "t_" + Date.now(),
-                                  name: template.name,
-                                  description: template.description,
-                                  isActive: true,
-                                  showInDaily: true,
-                                  listGroup: "1"
-                                }]
-                              };
-                              setGoals(prev => [...(prev || []), newGoal]);
-                              setAutoBackupToast({ message: `✓ "${template.name}" 목표가 추가되었습니다`, type: "success" });
-                              setTimeout(() => setAutoBackupToast(null), 2500);
-                            }}
-                            style={{
-                              fontSize: 10,
-                              padding: "6px 10px",
-                              background: PK,
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: 4,
-                              cursor: "pointer",
-                              fontWeight: 600,
-                              transition: "opacity 0.2s"
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.9"; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
-                          >
-                            + 추가
-                          </button>
-                          {/* 마이 템플릿일 때만 삭제 버튼 표시 */}
-                          {templateTab === "my" && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                askConfirm(`"${template.name}" 마이 템플릿을 삭제할까요?`, () => {
-                                  const next = templateLibrary.filter(t => t.id !== template.id);
-                                  setTemplateLibrary(next);
-                                  try { localStorage.setItem("aba_template_library", JSON.stringify(next)); } catch (e) {}
-                                  setAutoBackupToast({ message: `✓ 마이 템플릿이 삭제되었습니다`, type: "success" });
-                                  setTimeout(() => setAutoBackupToast(null), 2500);
-                                });
-                              }}
-                              style={{
-                                fontSize: 9,
-                                padding: "4px 8px",
-                                background: "transparent",
-                                color: "#aaa",
-                                border: `1px solid ${PKL}`,
-                                borderRadius: 4,
-                                cursor: "pointer",
-                                marginTop: 4
-                              }}
-                            >
-                              🗑 삭제
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    {/* 마이 템플릿 탭일 때 추가 버튼 */}
-                    {templateTab === "my" && filtered.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setTemplateModal({ name: "", description: "", domain: "발달 언어" });
-                        }}
-                        style={{
-                          fontSize: 11,
-                          padding: "6px 12px",
-                          background: "#fff",
-                          color: PKD,
-                          border: `1px dashed ${PK}`,
-                          borderRadius: 6,
-                          cursor: "pointer",
-                          fontWeight: 600,
-                          marginBottom: 12
-                        }}
-                      >
-                        + 새 마이 템플릿 추가
-                      </button>
-                    )}
-                  </>
-                );
-              })()}
-
-              <div style={{ fontSize: 10, color: "#888", fontStyle: "italic", padding: "10px", background: "#fff", borderRadius: 6, border: `1px solid ${PKL}` }}>
-                💡 자주 쓰는 목표를 한 번에 추가할 수 있습니다. 추가 후 필요에 따라 편집하세요.
-              </div>
-            </div>
+            {/* ★ [제거] 목표 템플릿 라이브러리 — 커리큘럼(ELCAR/VB-MAPP/ESDM)+통합검색과 기능 중복으로 삭제 */}
 
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18 }}>
               <button style={BS} onClick={() => setTab("info")}>← 아동정보</button>
@@ -8205,9 +8120,9 @@ export default function App() {
             onPreview={() => {
               setView("print");
             }}
-            onPrint={() => {
+            onPrint={(action = "print") => {
               if (reportMode === "final") {
-                const confirmFinalMsg = `🎓 종결보고서 양식으로 인쇄하기\n\n다음 작업이 자동으로 진행됩니다:\n  ✓ 종결보고서가 보관함에 저장됨\n  ✓ 그래프 컷오프는 적용되지 않음 (전체 기간 데이터 유지)\n  ✓ 다음 차수 시작일은 그대로 유지\n\n진행하시겠습니까?\n\n(보관 없이 양식만 보려면 [👁 미리보기]를 사용하세요)`;
+                const confirmFinalMsg = `🎓 종결보고서 ${action === "pdf" ? "PDF로 저장" : "인쇄"}하기\n\n다음 작업이 자동으로 진행됩니다:\n  ✓ 종결보고서가 보관함에 저장됨\n  ✓ 그래프 컷오프는 적용되지 않음 (전체 기간 데이터 유지)\n  ✓ 다음 차수 시작일은 그대로 유지\n\n진행하시겠습니까?\n\n(보관 없이 양식만 보려면 [👁 미리보기]를 사용하세요)`;
                 askConfirm(confirmFinalMsg, async () => {
                   try {
                     if (!activeChildId || !info?.name?.trim()) {
@@ -8222,11 +8137,12 @@ export default function App() {
                     console.error("[종결보관 오류 - 인쇄는 진행]", e);
                     alert("보관 중 오류가 있었지만 인쇄는 계속 진행됩니다.\n오류: " + (e?.message || String(e)));
                   }
+                  setAutoPrintAction(action);
                   setView("print");
                 });
                 return;
               }
-              const confirmMsg = `📄 중간보고서 양식으로 인쇄하기\n\n다음 작업이 자동으로 진행됩니다:\n  ✓ 현재 보고서가 보관함에 저장됨\n  ✓ 그래프에 컷오프 적용 (이전 데이터는 보관함에서 확인)\n  ✓ 다음 차수 시작일이 자동 갱신됨 (오늘+1)\n\n진행하시겠습니까?\n\n(보관 없이 양식만 보려면 [👁 미리보기]를 사용하세요)`;
+              const confirmMsg = `📄 중간보고서 ${action === "pdf" ? "PDF로 저장" : "인쇄"}하기\n\n다음 작업이 자동으로 진행됩니다:\n  ✓ 현재 보고서가 보관함에 저장됨\n  ✓ 그래프에 컷오프 적용 (이전 데이터는 보관함에서 확인)\n  ✓ 다음 차수 시작일이 자동 갱신됨 (오늘+1)\n\n진행하시겠습니까?\n\n(보관 없이 양식만 보려면 [👁 미리보기]를 사용하세요)`;
               askConfirm(confirmMsg, async () => {
                 try {
                   if (!activeChildId || !info?.name?.trim()) {
@@ -8246,6 +8162,7 @@ export default function App() {
                   console.error("[보관 오류 - 인쇄는 진행]", e);
                   alert("보관 중 오류가 있었지만 인쇄는 계속 진행됩니다.\n오류: " + (e?.message || String(e)));
                 }
+                setAutoPrintAction(action);
                 setView("print");
               });
             }} />
@@ -8465,95 +8382,7 @@ export default function App() {
       )}
 
       {/* ═══ 마이 템플릿 생성 모달 (v19) ═══ */}
-      {templateModal && (
-        <div
-          onClick={() => setTemplateModal(null)}
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16 }}>
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ background: "#fff", borderRadius: 14, maxWidth: 460, width: "100%", padding: "22px 24px", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", border: `2px solid ${PK}` }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: PKD, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 18 }}>🏷️</span>
-              <span>새 마이 템플릿 만들기</span>
-            </div>
-
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 11, fontWeight: 600, color: "#555", display: "block", marginBottom: 4 }}>이름 <span style={{ color: PKD }}>*</span></label>
-              <input
-                type="text"
-                autoFocus
-                value={templateModal.name}
-                onChange={(e) => setTemplateModal({ ...templateModal, name: e.target.value })}
-                placeholder="예: 🎯 우리 센터 표준 모방"
-                style={{ width: "100%", padding: "8px 10px", fontSize: 12, border: `1px solid ${PKL}`, borderRadius: 6, fontFamily: "inherit", boxSizing: "border-box" }}
-              />
-            </div>
-
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 11, fontWeight: 600, color: "#555", display: "block", marginBottom: 4 }}>설명</label>
-              <input
-                type="text"
-                value={templateModal.description}
-                onChange={(e) => setTemplateModal({ ...templateModal, description: e.target.value })}
-                placeholder="예: 신체 모방 5종 학습"
-                style={{ width: "100%", padding: "8px 10px", fontSize: 12, border: `1px solid ${PKL}`, borderRadius: 6, fontFamily: "inherit", boxSizing: "border-box" }}
-              />
-            </div>
-
-            <div style={{ marginBottom: 18 }}>
-              <label style={{ fontSize: 11, fontWeight: 600, color: "#555", display: "block", marginBottom: 4 }}>영역</label>
-              <select
-                value={templateModal.domain}
-                onChange={(e) => setTemplateModal({ ...templateModal, domain: e.target.value })}
-                style={{ width: "100%", padding: "8px 10px", fontSize: 12, border: `1px solid ${PKL}`, borderRadius: 6, fontFamily: "inherit", background: "#fff", boxSizing: "border-box" }}
-              >
-                <option value="발달 언어">발달 언어</option>
-                <option value="행동 관리">행동 관리</option>
-                <option value="생활 기술">생활 기술</option>
-                <option value="사회성">사회성</option>
-                <option value="학습">학습</option>
-                <option value="기타">기타</option>
-              </select>
-            </div>
-
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                onClick={() => setTemplateModal(null)}
-                style={{ padding: "8px 18px", border: "1.5px solid #ddd", background: "#fff", color: "#666", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const trimmedName = (templateModal.name || "").trim();
-                  if (!trimmedName) {
-                    setAutoBackupToast({ message: "⚠️ 이름을 입력해주세요", type: "error" });
-                    setTimeout(() => setAutoBackupToast(null), 2500);
-                    return;
-                  }
-                  const newTpl = {
-                    id: "t_my_" + Date.now(),
-                    name: trimmedName,
-                    description: (templateModal.description || "").trim(),
-                    domain: (templateModal.domain || "발달 언어").trim(),
-                    category: "마이"
-                  };
-                  const next = [...templateLibrary, newTpl];
-                  setTemplateLibrary(next);
-                  try { localStorage.setItem("aba_template_library", JSON.stringify(next)); } catch (e) {}
-                  setTemplateModal(null);
-                  setTemplateTab("my");  // 마이 템플릿 탭으로 전환
-                  setAutoBackupToast({ message: `✓ "${trimmedName}" 마이 템플릿이 추가되었습니다`, type: "success" });
-                  setTimeout(() => setAutoBackupToast(null), 2500);
-                }}
-                style={{ padding: "8px 18px", border: "none", background: PK, color: "#fff", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                저장
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ★ [제거] 마이 템플릿 추가 모달 — 템플릿 라이브러리 삭제로 함께 제거 */}
     </div>
   );
 }
@@ -9360,7 +9189,7 @@ function GoalCard({ goal, active, onToggle, onRemove, onUpdate, onToggleStatus, 
     : { bg: PKL, fg: PKD };  // ELCAR 기본
 
   return (
-    <div style={{ border: `1px solid ${active ? PK : "#f0e0e5"}`, borderRadius: 12, marginBottom: 10, overflow: "hidden", background: active ? "#fefafb" : "#fff" }}>
+    <div style={{ border: `1px solid ${active ? PK : "#f0e0e5"}`, borderLeft: `5px solid ${goal.showInDaily ? "#7bb33f" : "#dcdcdc"}`, borderRadius: 12, marginBottom: 10, overflow: "hidden", background: active ? "#fefafb" : (goal.showInDaily ? "#fcfdfa" : "#fff") }}>
       {/* 헤더 — U-C-1: 키보드 접근 가능 (role=button + Enter/Space) */}
       <div
         role="button"
@@ -9475,20 +9304,28 @@ function GoalCard({ goal, active, onToggle, onRemove, onUpdate, onToggleStatus, 
         </div>
         {/* "최근 N%" 표시 — 제거 (교사용 IEP, 진행률은 ③ 데일리 탭에서 확인) */}
         {/* (과제 개수 뱃지는 Step 2에서 제거됨 — 세부 과제 관리는 [③ 데일리] 탭에서) */}
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <button
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div
+            role="button"
+            tabIndex={0}
             onClick={e => { e.stopPropagation(); onToggleShowInDaily && onToggleShowInDaily(goal.id); }}
-            title={goal.showInDaily ? "데이터 시트에서 제외" : "데이터 시트에 추가 — ③ 데일리 탭에 표시됨"}
-            style={{
-              fontSize: 9.5, padding: "3px 8px",
-              background: goal.showInDaily ? "#eaf3de" : "#fff",
-              color: goal.showInDaily ? "#4a7316" : "#999",
-              border: `1.5px solid ${goal.showInDaily ? "#9bc26b" : "#e0e0e0"}`,
-              borderRadius: 8, fontWeight: 700, whiteSpace: "nowrap",
-              cursor: "pointer", fontFamily: "inherit"
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onToggleShowInDaily && onToggleShowInDaily(goal.id); } }}
+            title={goal.showInDaily ? "데이터 시트에 표시 중 — 누르면 제외" : "데이터 시트에서 제외됨 — 누르면 ③ 데일리 탭에 표시"}
+            style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", userSelect: "none" }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: goal.showInDaily ? "#4a7316" : "#bbb", whiteSpace: "nowrap" }}>시트</span>
+            {/* 토글 스위치 */}
+            <div style={{
+              width: 38, height: 21, borderRadius: 11,
+              background: goal.showInDaily ? "#7bb33f" : "#dcdcdc",
+              position: "relative", transition: "background 0.15s ease", flexShrink: 0
             }}>
-            {goal.showInDaily ? "📋 시트 ON" : "📋 시트 OFF"}
-          </button>
+              <div style={{
+                width: 15, height: 15, borderRadius: "50%", background: "#fff",
+                position: "absolute", top: 3, left: goal.showInDaily ? 20 : 3,
+                transition: "left 0.15s ease", boxShadow: "0 1px 2px rgba(0,0,0,0.2)"
+              }} />
+            </div>
+          </div>
           <button onClick={e => { e.stopPropagation(); onRemove(); }} title="IEP에서 제외 (목표 자체는 유지됨)" style={{ background: "none", border: "none", color: "#ccc", cursor: "pointer", fontSize: 18, padding: "0 4px" }}>×</button>
         </div>
       </div>
@@ -9759,13 +9596,13 @@ function VbmappGrid({ goals }) {
     { bg: "#FEFAF0", dot: "#B8924B", border: "#F7DDB0" },  // L3 머스타드
   ];
   const lvHeaderBg = ["#FBDBC6", "#E8D7F2", "#F7DDB0"];
-  const cellSz = 22;
+  const cellSz = 15;
   return (
     <div style={{ overflowX: "auto", maxWidth: "100%" }}>
       <table className="vbmapp-grid" style={{ borderCollapse: "collapse", fontSize: 10, border: "1.5px solid #b8a8b0", margin: "0 auto" }}>
         <thead>
           <tr>
-            <th style={{ padding: "4px 8px", border: "1px solid #e0d0d6", background: "#fdf8f9", textAlign: "left", fontSize: 9, minWidth: 140, position: "sticky", left: 0, zIndex: 1 }}>영역</th>
+            <th style={{ padding: "4px 8px", border: "1px solid #e0d0d6", background: "#fdf8f9", textAlign: "left", fontSize: 9, minWidth: 118, position: "sticky", left: 0, zIndex: 1 }}>영역</th>
             <th colSpan={5} style={{ padding: 3, border: "1px solid #e0d0d6", background: lvHeaderBg[0], textAlign: "center", fontSize: 8, color: "#8B5A2B" }}>Level 1 (1-5)</th>
             <th colSpan={5} style={{ padding: 3, border: "1px solid #e0d0d6", background: lvHeaderBg[1], textAlign: "center", fontSize: 8, color: "#7A5BA0" }}>Level 2 (6-10)</th>
             <th colSpan={5} style={{ padding: 3, border: "1px solid #e0d0d6", background: lvHeaderBg[2], textAlign: "center", fontSize: 8, color: "#9E7836" }}>Level 3 (11-15)</th>
@@ -9774,7 +9611,7 @@ function VbmappGrid({ goals }) {
         <tbody>
           {domainNames.map(d => (
             <tr key={d}>
-              <td style={{ padding: "2px 8px", border: "1px solid #e0d0d6", fontSize: 9, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", position: "sticky", left: 0, background: "#fff", zIndex: 1, width: 140, minWidth: 140, maxWidth: 140 }}>
+              <td style={{ padding: "2px 8px", border: "1px solid #e0d0d6", fontSize: 9, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", position: "sticky", left: 0, background: "#fff", zIndex: 1, width: 118, minWidth: 118, maxWidth: 118 }}>
                 {d}
               </td>
               {[0, 1, 2].map(li => [1, 2, 3, 4, 5].map(n => {
@@ -9786,7 +9623,7 @@ function VbmappGrid({ goals }) {
                     background: isFilled ? lvBg[li].bg : "#fff",
                     width: cellSz, height: cellSz, minWidth: cellSz, maxWidth: cellSz,
                   }}>
-                    {isFilled ? <span style={{ fontSize: 12, color: lvBg[li].dot, fontWeight: 700 }}>●</span> : ""}
+                    {isFilled ? <span style={{ fontSize: 9, color: lvBg[li].dot, fontWeight: 700 }}>●</span> : ""}
                   </td>
                 );
               }))}
@@ -9804,7 +9641,7 @@ function VbmappGrid({ goals }) {
   );
 }
 
-function PrintView({ info, goals, domainAvgs, domainLevelOverrides, reportSections, reportSelStrats, reportSelStratsCustom, reportSelPrein, reportSelSrein, reportReinfSchedule, reportBehaviors, stosForReport, goalsForReport, archiveList, dailyMemos, mode, onBack }) {
+function PrintView({ info, goals, domainAvgs, domainLevelOverrides, reportSections, reportSelStrats, reportSelStratsCustom, reportSelPrein, reportSelSrein, reportReinfSchedule, reportBehaviors, stosForReport, goalsForReport, archiveList, dailyMemos, mode, onBack, autoPrint = "", onAutoPrintDone }) {
   const isIepMode = mode === "iep";
   const isFinalMode = mode === "final";  // ★ 종결보고서 모드
   const grouped = useMemo(() => {
@@ -9822,6 +9659,22 @@ function PrintView({ info, goals, domainAvgs, domainLevelOverrides, reportSectio
   let _sectionCounter = 0;
   const nextSn = () => String(++_sectionCounter);
 
+  // ★ [바로 인쇄/저장] 미리보기 화면에 autoPrint 신호를 받고 들어오면, 렌더 직후 인쇄 대화상자를 자동으로 띄움.
+  //    runPrint 함수는 아래 버튼 영역(IIFE)에서 runPrintRef에 저장됨.
+  const runPrintRef = useRef(null);
+  const autoPrintFiredRef = useRef(false);
+  useEffect(() => {
+    if (autoPrint && !autoPrintFiredRef.current) {
+      autoPrintFiredRef.current = true;
+      // 보고서 DOM이 그려질 시간을 약간 준 뒤 실행
+      const t = setTimeout(() => {
+        if (typeof runPrintRef.current === "function") runPrintRef.current();
+        if (onAutoPrintDone) onAutoPrintDone();
+      }, 600);
+      return () => clearTimeout(t);
+    }
+  }, [autoPrint]);
+
   return (
     <div style={{ fontFamily: "'Malgun Gothic','Noto Sans KR','Pretendard',sans-serif", background: "#f5f5f5", minHeight: "100vh", padding: "20px 0" }}>
       {/* 화면 상단 컨트롤 바 (인쇄 시 숨김) */}
@@ -9829,7 +9682,8 @@ function PrintView({ info, goals, domainAvgs, domainLevelOverrides, reportSectio
         <button style={BS} onClick={onBack}>← 편집 화면으로</button>
         <div className="hide-on-mobile" style={{ fontSize: 12, color: "#888" }}>A4 세로 · PDF 공문서 양식</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button style={BP} onClick={() => {
+          {(() => {
+            const runPrint = () => {
             try {
               const el = document.getElementById("printable-report");
               if (!el) { alert("인쇄 영역을 찾을 수 없습니다."); return; }
@@ -9934,7 +9788,7 @@ function PrintView({ info, goals, domainAvgs, domainLevelOverrides, reportSectio
               const cleanedHTML = cloned.innerHTML;
               const dt = new Date().toISOString().slice(0, 10);
               const cn = (info && info.name ? info.name : "아동").replace(/[\\/:*?"<>|]/g, "");
-              const tg = isIepMode ? "IEP_계획안" : "중간보고서";
+              const tg = isIepMode ? "IEP_계획안" : isFinalMode ? "종결보고서" : "중간보고서";
               const fileName = "검단ABA_" + tg + "_" + cn + "_" + dt + ".html";
               const docTitle = "검단ABA " + tg + " - " + cn;
 
@@ -9947,7 +9801,7 @@ function PrintView({ info, goals, domainAvgs, domainLevelOverrides, reportSectio
 '#printable-report svg{display:block!important;margin-left:auto!important;margin-right:auto!important}\n' +
 'body{font-family:\'Malgun Gothic\',\'Noto Sans KR\',sans-serif;font-size:10.5pt;line-height:1.75;color:#333;word-break:keep-all;overflow-wrap:break-word;-webkit-hyphens:none;hyphens:none;orphans:3;widows:3}\n' +
 '*{word-break:keep-all;overflow-wrap:break-word}\n' +
-'@page{size:A4 portrait;margin:22mm 14mm 20mm 14mm;@top-center{content:"검단ABA언어행동연구소";font-family:\'Pretendard\',\'Malgun Gothic\',sans-serif;font-size:8.5pt;color:#D4728A;font-weight:600;letter-spacing:0.5px}@bottom-left{content:"검단ABA언어행동연구소";font-family:\'Pretendard\',\'Malgun Gothic\',sans-serif;font-size:7.5pt;color:#999}@bottom-right{content:"Page " counter(page) " / " counter(pages);font-family:\'Pretendard\',\'Malgun Gothic\',sans-serif;font-size:7.5pt;color:#999}}\n' +
+'@page{size:A4 portrait;margin:22mm 14mm 20mm 14mm;@top-center{content:"검단ABA언어행동연구소";font-family:\'Pretendard\',\'Malgun Gothic\',sans-serif;font-size:8.5pt;color:#D4728A;font-weight:600;letter-spacing:0.5px}@bottom-left{content:"검단ABA언어행동연구소";font-family:\'Pretendard\',\'Malgun Gothic\',sans-serif;font-size:7.5pt;color:#999}@bottom-center{content:"© 검단ABA언어행동연구소 · 민다혜(BCBA) — 무단 복제·배포·재판매 금지";font-family:\'Pretendard\',\'Malgun Gothic\',sans-serif;font-size:6.5pt;color:#bbb;letter-spacing:0.2px}@bottom-right{content:"Page " counter(page) " / " counter(pages);font-family:\'Pretendard\',\'Malgun Gothic\',sans-serif;font-size:7.5pt;color:#999}}\n' +
 '/* 본문 배경 워터마크 - 복제 방지 */\n' +
 '#printable-report{position:relative}\n' +
 '#printable-report::before{content:"검단ABA";position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);font-size:100pt;font-weight:900;color:rgba(212,114,138,0.05);z-index:0;pointer-events:none;letter-spacing:8px;font-family:\'Malgun Gothic\',\'Noto Sans KR\',sans-serif;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}\n' +
@@ -10003,10 +9857,10 @@ function PrintView({ info, goals, domainAvgs, domainLevelOverrides, reportSectio
 '/* 미니 라인 차트 - 290x80 고정 (영역별 세부 학습 목표) */\n' +
 'svg.dashboard-bigchart{width:290px!important;height:80px!important;max-width:100%!important;display:block!important;margin:0 auto!important}\n' +
 '/* Info 표 */\n' +
-'.info-table-main{font-size:12pt!important;margin-bottom:12pt!important;border:1px solid #eee!important}\n' +
-'.info-table-main td{padding:9pt 12pt!important;line-height:1.6!important;font-size:11pt!important;border:1px solid #eee!important;background:#fff!important;vertical-align:middle!important}\n' +
-'.info-table-main td:nth-child(odd){font-weight:600!important;width:16%!important;color:#555!important}\n' +
-'.info-table-main td:nth-child(even){color:#222!important}\n' +
+'.info-table-main{font-size:12pt!important;margin-bottom:12pt!important;border:1px solid ' + PKL + '!important}\n' +
+'.info-table-main td{padding:9pt 12pt!important;line-height:1.6!important;font-size:11pt!important;border:1px solid ' + PKL + '!important;vertical-align:middle!important}\n' +
+'.info-table-main td:nth-child(odd){font-weight:600!important;width:16%!important;color:' + PKD + '!important;background:' + PKL + '!important;letter-spacing:0.5px!important}\n' +
+'.info-table-main td:nth-child(even){color:#222!important;background:#fff!important}\n' +
 '/* 마지막 자식 마진 정리 */\n' +
 '#printable-report>*:last-child{margin-bottom:0!important}\n' +
 '.dashboard-card:last-child,.dashboard-domain:last-child{margin-bottom:0!important}\n' +
@@ -10016,7 +9870,7 @@ function PrintView({ info, goals, domainAvgs, domainLevelOverrides, reportSectio
 'tbody tr td{page-break-inside:avoid!important;break-inside:avoid!important}\n' +
 'p{page-break-inside:avoid!important;break-inside:avoid!important;orphans:3!important;widows:3!important}\n' +
 '/* 서명란 */\n' +
-'.signature-section{page-break-inside:avoid!important;break-inside:avoid!important;text-align:center!important}\n' +
+'.signature-section{page-break-inside:avoid!important;break-inside:avoid!important;text-align:center!important;min-height:210mm!important;display:flex!important;flex-direction:column!important;justify-content:flex-end!important}\n' +
 '.signature-table{width:75%!important;margin:0 auto!important}\n' +
 '</style></head><body>\n' +
 cleanedHTML + '\n' +
@@ -10044,7 +9898,15 @@ cleanedHTML + '\n' +
               console.error("[PDF 저장]", err);
               alert("저장 실패: " + (err && err.message ? err.message : err));
             }
-          }}>📄 PDF로 저장하기</button>
+            };
+            runPrintRef.current = runPrint;
+            return (
+              <>
+                <button style={BP} onClick={runPrint} title="인쇄 대화상자를 엽니다 (프린터 선택)">🖨️ 인쇄</button>
+                <button style={BP} onClick={runPrint} title="인쇄 대화상자에서 '대상'을 'PDF로 저장'으로 선택하세요">📄 PDF로 저장</button>
+              </>
+            );
+          })()}
         </div>
       </div>
 
@@ -10093,12 +9955,12 @@ cleanedHTML + '\n' +
             </div>
           </div>
 
-          {/* "중간 보고서" 제목 */}
+          {/* 보고서 제목 — ★ IEP/중간/종결 모두 IEP 기준 크기로 통일 */}
           <div style={{
-            fontSize: isIepMode ? 32 : 24,
+            fontSize: 32,
             fontWeight: 700,
-            color: isIepMode ? "#222" : "#333",
-            letterSpacing: isIepMode ? "-1px" : "3px",
+            color: "#222",
+            letterSpacing: "-1px",
             marginTop: 4
           }}>
             {isIepMode ? "개별화 교육 계획안" : isFinalMode ? "종결 보고서" : "중간 보고서"}
@@ -10118,7 +9980,7 @@ cleanedHTML + '\n' +
 
           {/* IEP 표지 정보표 — 표지와 같은 페이지에 포함 */}
           {isIepMode && (
-            <div style={{ paddingTop: 24 }}>
+            <div style={{ paddingTop: 110 }}>
               <table className="iep-cover-info-table" style={{
                 margin: "0 auto",
                 borderCollapse: "collapse",
@@ -10134,7 +9996,7 @@ cleanedHTML + '\n' +
                     ["생 년 월 일", info.birth || "—"],
                     ["소 속 반", info.room || "개별 ABA"],
                     ["치 료 사", info.therapist || "—"],
-                    ["평가 진행일", (info.evalStart && info.evalEnd) ? `${info.evalStart} ~ ${info.evalEnd}` : (info.evalStart || info.evalEnd || "—")],
+                    ["평가 진행일", (() => { const [s, e] = orderDateRange(info.evalStart, info.evalEnd); return (s && e) ? `${s} ~ ${e}` : (s || e || "—"); })()],
                     ["수업 시작일", info.startDate || today]
                   ].map(([k, v]) => (
                     <tr key={k}>
@@ -10849,8 +10711,8 @@ cleanedHTML + '\n' +
 
             {/* ★ [v19] 영역별 관찰 현황 인쇄 섹션 제거 — 4섹션 칩+✨ 자동생성으로 대체 */}
 
-            {/* 1. 종합 현황 */}
-            {reportSections && (() => {
+            {/* 1. 종합 현황 — ★ 종결모드에서는 제외 (종합 평가와 내용 중복) */}
+            {!isFinalMode && reportSections && (() => {
               const stripMarker = (s) => (s || "").replace(/\n*<!--SELECTED:[^>]*-->\s*$/g, "").trim();
               const overviewClean = stripMarker(reportSections["종합 현황"]);
               const summaryClean = stripMarker(reportSections["총괄 요약 및 권고사항"]);
@@ -11072,7 +10934,8 @@ cleanedHTML + '\n' +
         {/* ═══ 10. 승인서 / 확인 및 서명 ═══ */}
         {/* 두 모드 모두 동일한 디자인 (중간보고서 스타일로 통일) — IEP는 동의 본문만 추가 */}
         {isIepMode ? (
-          <div style={{ marginTop: 32, borderTop: `2px solid ${PK}`, paddingTop: 18, pageBreakBefore: "always", breakBefore: "page", pageBreakInside: "avoid", breakInside: "avoid" }} className="signature-section">
+          <div className="signature-section" style={{ pageBreakBefore: "always", breakBefore: "page", pageBreakInside: "avoid", breakInside: "avoid" }}>
+           <div style={{ borderTop: `2px solid ${PK}`, paddingTop: 18 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: PKD, marginBottom: 12, letterSpacing: "0.5px", textAlign: "center" }}>개별화 중재 계획안 작성 확인</div>
             {/* IEP 고유: 작성 확인 본문 */}
             <div style={{ textAlign: "center", padding: "10px 0 16px", fontSize: 11, lineHeight: 1.85, color: "#555" }}>
@@ -11114,10 +10977,12 @@ cleanedHTML + '\n' +
                 );
               })()}
             </div>
+           </div>
           </div>
         ) : (
           /* ═══ 서명란 — USER_APP 4076~4097줄 그대로 ═══ */
-          <div style={{ marginTop: 32, borderTop: `2px solid ${PK}`, paddingTop: 18, pageBreakBefore: "always", breakBefore: "page", pageBreakInside: "avoid", breakInside: "avoid" }} className="signature-section">
+          <div className="signature-section" style={{ pageBreakBefore: "always", breakBefore: "page", pageBreakInside: "avoid", breakInside: "avoid" }}>
+           <div style={{ borderTop: `2px solid ${PK}`, paddingTop: 18 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: PKD, marginBottom: 12, letterSpacing: "0.5px", textAlign: "center" }}>확인 및 서명</div>
             <table style={{ width: "75%", margin: "0 auto", borderCollapse: "collapse", fontSize: 11 }} className="signature-table">
               <thead><tr>
@@ -11153,6 +11018,7 @@ cleanedHTML + '\n' +
                 );
               })()}
             </div>
+           </div>
           </div>
         )}
 
@@ -11169,8 +11035,8 @@ cleanedHTML + '\n' +
             return `${childName}의 본 보고 기간 동안 확인된 진행 양상을 토대로, 다음 단계의 중재를 진행합니다.`;
           })()}
         </div>
-        <div style={{ marginTop: 12, fontSize: 10, color: "#999", textAlign: "center", letterSpacing: "0.5px" }}>
-          © {SUPERVISOR_TITLE}
+        <div style={{ marginTop: 12, fontSize: 9, color: "#999", textAlign: "center", letterSpacing: "0.3px", lineHeight: 1.6, paddingTop: 8, borderTop: "0.5px solid #eee" }} className="report-copyright">
+          {REPORT_COPYRIGHT}
         </div>
       </div>
 
@@ -11196,6 +11062,13 @@ cleanedHTML + '\n' +
               font-family: 'Pretendard','Noto Sans KR','Malgun Gothic',sans-serif;
               font-size: 7.5pt;
               color: #999;
+            }
+            @bottom-center {
+              content: "© 검단ABA언어행동연구소 · 민다혜(BCBA) — 무단 복제·배포·재판매 금지";
+              font-family: 'Pretendard','Noto Sans KR','Malgun Gothic',sans-serif;
+              font-size: 6.5pt;
+              color: #bbb;
+              letter-spacing: 0.2px;
             }
             @bottom-right {
               content: "Page " counter(page) " / " counter(pages);
@@ -11231,12 +11104,12 @@ cleanedHTML + '\n' +
           /* 기본 정보 테이블 */
           #printable-report table:first-of-type { font-size: 11pt !important; margin-bottom: 10pt !important; width: 100% !important; }
           #printable-report table:first-of-type td { padding: 6pt 9pt !important; border: 0.5pt solid #c8b0b8 !important; line-height: 1.6 !important; }
-          #printable-report table:first-of-type td:nth-child(odd) { background: #fff !important; font-weight: 600 !important; width: 16% !important; color: #555 !important; font-size: 10.5pt !important; }
-          /* Info 표 명시적 규칙 — 캡처 2 스타일 (흰 배경 + 가벼운 회색 테두리) */
-          .info-table-main { font-size: 11pt !important; border: 1px solid #eee !important; }
-          .info-table-main td { padding: 9pt 12pt !important; font-size: 11pt !important; line-height: 1.6 !important; border: 1px solid #eee !important; background: #fff !important; vertical-align: middle !important; }
-          .info-table-main td:nth-child(odd) { font-weight: 600 !important; color: #555 !important; }
-          .info-table-main td:nth-child(even) { color: #222 !important; }
+          #printable-report table:first-of-type td:nth-child(odd) { background: ${PKL} !important; font-weight: 600 !important; width: 16% !important; color: ${PKD} !important; font-size: 10.5pt !important; }
+          /* Info 표 명시적 규칙 — 라벨 핑크 (IEP 표지 정보표와 통일된 색감) */
+          .info-table-main { font-size: 11pt !important; border: 1px solid ${PKL} !important; }
+          .info-table-main td { padding: 9pt 12pt !important; font-size: 11pt !important; line-height: 1.6 !important; border: 1px solid ${PKL} !important; vertical-align: middle !important; }
+          .info-table-main td:nth-child(odd) { font-weight: 600 !important; color: ${PKD} !important; background: ${PKL} !important; letter-spacing: 0.5px !important; }
+          .info-table-main td:nth-child(even) { color: #222 !important; background: #fff !important; }
           /* 보고서 섹션 컨테이너 — borderTop 있는 div = 본문 4섹션 */
           #printable-report > div[style*="borderTop"], #printable-report > .print-section-accent { border-top: 0.75pt solid #e0c8d0 !important; padding-top: 7pt !important; margin-top: 7pt !important; }
           #printable-report > div[style*="borderTop"] > div:first-child, .print-section-accent-title { font-size: 10.5pt !important; font-weight: 700 !important; color: #8B3A5E !important; margin-bottom: 3pt !important; padding-left: 6pt !important; border-left: 3pt solid #F5A0B1 !important; page-break-after: avoid !important; break-after: avoid !important; }
@@ -11430,6 +11303,13 @@ cleanedHTML + '\n' +
           .force-page-break { 
             page-break-before: always !important; 
             break-before: page !important; 
+          }
+          /* ★ 서명란 — 페이지 하단에 붙이기 */
+          .signature-section {
+            min-height: 210mm !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: flex-end !important;
           }
           .avoid-page-break { 
             page-break-inside: avoid !important; 
@@ -11762,6 +11642,7 @@ function DailyTab({ goals, dailyDate, setDailyDate, calcDayRate, addTask, remove
   const [memoDraft, setMemoDraft] = useState(currentMemo);
   const [showAllMemos, setShowAllMemos] = useState(false);
   const [showMediaGallery, setShowMediaGallery] = useState(false);
+  const [showInputHelp, setShowInputHelp] = useState(false); // ★ 입력 방법 안내 토글
   const lastSyncedKeyRef = useRef(`${dailyDate}::${currentMemo}`);
   useEffect(() => {
     const externalValue = (dailyMemos && dailyMemos[dailyDate]) || "";
@@ -11916,70 +11797,59 @@ function DailyTab({ goals, dailyDate, setDailyDate, calcDayRate, addTask, remove
 
   return (
     <div>
-      {/* 날짜 선택 + 요약 + 증거물 */}
-      <div className="responsive-daily-header" style={{ ...CS, display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 16, alignItems: "center" }}>
+      {/* 날짜 + 요약 + 활동 사진/입력 방법 — 슬림 한 줄 */}
+      <div className="responsive-daily-header" style={{ ...CS, display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap", padding: "10px 16px" }}>
         <div>
-          <label style={LS}>기록 날짜</label>
-          <input type="date" style={{ ...IS, width: 170, fontWeight: 600, color: PKD }} value={dailyDate} onChange={e => setDailyDate(e.target.value)} />
+          <label style={{ ...LS, marginBottom: 2 }}>기록 날짜</label>
+          <input type="date" style={{ ...IS, width: 150, fontWeight: 600, color: PKD, padding: "5px 8px" }} value={dailyDate} onChange={e => setDailyDate(e.target.value)} />
         </div>
-        <div style={{ display: "flex", gap: 18, justifyContent: "center" }}>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 10, color: "#767676", marginBottom: 3 }}>오늘 기록한 과제 (진행 중)</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: PKD }}>{todaySummary.recorded} <span style={{ fontSize: 14, color: "#aaa", fontWeight: 400 }}>/ {todaySummary.total}</span></div>
-          </div>
-          <div style={{ width: 1, background: "#e8d0d6" }} />
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 10, color: "#767676", marginBottom: 3 }}>평균 정반응률</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: todaySummary.avgRate === null ? "#ccc" : todaySummary.avgRate >= 80 ? GREEN : todaySummary.avgRate >= 50 ? BLUE : ORANGE }}>
-              {todaySummary.avgRate === null ? "—" : `${todaySummary.avgRate}%`}
-            </div>
+        <div style={{ width: 1, height: 36, background: "#eee" }} />
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 9.5, color: "#767676", marginBottom: 2 }}>오늘 기록</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: PKD }}>{todaySummary.recorded}<span style={{ fontSize: 12, color: "#aaa", fontWeight: 400 }}> / {todaySummary.total}</span></div>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 9.5, color: "#767676", marginBottom: 2 }}>정반응률</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: todaySummary.avgRate === null ? "#ccc" : todaySummary.avgRate >= 80 ? GREEN : todaySummary.avgRate >= 50 ? BLUE : ORANGE }}>
+            {todaySummary.avgRate === null ? "—" : `${todaySummary.avgRate}%`}
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
-          <div className="hide-on-mobile" style={{ fontSize: 9.5, color: "#767676", textAlign: "right", lineHeight: 1.5 }}>
-            💡 셀: <b style={{ color: GREEN }}>＋</b> → <b style={{ color: RED }}>－</b> → <b style={{ color: "#777" }}>NA</b> → 빈칸
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          {/* 입력 방법 — 클릭하면 안내 토글 */}
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => setShowInputHelp(v => !v)}
+              style={{ fontSize: 10, color: "#666", padding: "5px 10px", background: showInputHelp ? PKL : "#fdf8f9", borderRadius: 14, border: `1px solid ${PKL}`, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+              💡 입력 방법
+            </button>
+            {showInputHelp && (
+              <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 50, background: "#fff", border: `1px solid ${PK}`, borderRadius: 8, padding: "8px 12px", boxShadow: "0 4px 16px rgba(0,0,0,0.12)", whiteSpace: "nowrap", fontSize: 11, color: "#555", lineHeight: 1.7 }}>
+                셀을 누를 때마다 바뀝니다:<br/>
+                <b style={{ color: GREEN }}>＋</b> 정반응 → <b style={{ color: RED }}>－</b> 오반응 → <b style={{ color: "#777" }}>NA</b> 해당없음 → 빈칸
+              </div>
+            )}
           </div>
-          
-          {/* ★ [v19 신규] 증거물 진행도 (4개월 기반) — 클릭하면 갤러리 펼침 */}
+          {/* 활동 사진 — 작은 pill, 누르면 갤러리 펼침 */}
           {(() => {
             const list = mediaList || [];
             const fourMonthsAgo = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-            const recentMedia = list.filter(m => m.uploadedAt >= fourMonthsAgo);
-            const filledCount = recentMedia.length;
-            const maxCount = 20;
-            const percentage = Math.round((filledCount / maxCount) * 100);
-            
+            const filledCount = list.filter(m => m.uploadedAt >= fourMonthsAgo).length;
             return (
               <button
                 onClick={() => setShowMediaGallery(!showMediaGallery)}
-                style={{ 
-                  fontSize: 9, color: "#666", padding: "6px 10px", 
-                  background: "#fdf8f9", borderRadius: 6, 
-                  border: `1px solid ${PKL}`, 
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  textAlign: "left",
-                  width: 140
-                }}>
-                <div style={{ marginBottom: 4, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span>📸 증거물: {filledCount}/{maxCount}</span>
-                  <span style={{ fontSize: 8 }}>{showMediaGallery ? "▲" : "▼"}</span>
-                </div>
-                <div style={{ width: "100%", height: 6, background: "#e8d0d6", borderRadius: 3, overflow: "hidden" }}>
-                  <div style={{ width: `${percentage}%`, height: "100%", background: percentage >= 80 ? "#10b981" : percentage >= 50 ? "#f59e0b" : "#dc2626", transition: "width 0.3s" }} />
-                </div>
-                <div style={{ marginTop: 2, fontSize: 8, color: "#aaa" }}>{percentage}% (클릭하여 관리)</div>
+                style={{ fontSize: 10, color: "#666", padding: "5px 10px", background: showMediaGallery ? PKL : "#fdf8f9", borderRadius: 14, border: `1px solid ${PKL}`, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                📸 활동 사진 {filledCount > 0 ? filledCount : ""} {showMediaGallery ? "▲" : "▼"}
               </button>
             );
           })()}
         </div>
       </div>
 
-      {/* ★ [v19 신규] 증거물 갤러리 (펼침/접힘) */}
+      {/* ★ [v19 신규] 활동 사진 갤러리 (펼침/접힘) */}
       {showMediaGallery && (
         <div style={{ ...CS, marginBottom: 18, background: "#f9f5f7", border: `1px solid ${PKL}` }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: PKD }}>📸 평가 증거물 첨부</h3>
+            <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: PKD }}>📸 활동 사진 첨부</h3>
             <button
               onClick={() => setShowMediaGallery(false)}
               style={{ fontSize: 10, padding: "4px 10px", background: "#fff", border: `1px solid ${PKL}`, borderRadius: 4, color: "#666", cursor: "pointer" }}>
@@ -12020,7 +11890,7 @@ function DailyTab({ goals, dailyDate, setDailyDate, calcDayRate, addTask, remove
                     .slice(0, 20);
                   
                   setInfo(p => ({ ...p, mediaList: updated }));
-                  if (addHistory) addHistory("media_upload", `증거물 추가 (${dailyDate}): ${file.name}`, null, file.name, "mediaList");
+                  if (addHistory) addHistory("media_upload", `활동 사진 추가 (${dailyDate}): ${file.name}`, null, file.name, "mediaList");
                   e.target.value = "";  // input 초기화
                 };
                 reader.readAsDataURL(file);
@@ -12066,7 +11936,7 @@ function DailyTab({ goals, dailyDate, setDailyDate, calcDayRate, addTask, remove
                           if (window.confirm(`${media.name}를 삭제하시겠습니까?`)) {
                             const updated = (mediaList || []).filter((m) => m.id !== media.id);
                             setInfo(p => ({ ...p, mediaList: updated }));
-                            if (addHistory) addHistory("media_delete", `증거물 삭제: ${media.name}`, media.name, null, "mediaList");
+                            if (addHistory) addHistory("media_delete", `활동 사진 삭제: ${media.name}`, media.name, null, "mediaList");
                           }
                         }}
                         style={{
@@ -12090,7 +11960,7 @@ function DailyTab({ goals, dailyDate, setDailyDate, calcDayRate, addTask, remove
           ) : (
             <div style={{ padding: 30, textAlign: "center", background: "#fff", borderRadius: 8, border: `1px solid ${PKL}` }}>
               <div style={{ fontSize: 30, marginBottom: 8, opacity: 0.5 }}>📷</div>
-              <div style={{ fontSize: 12, color: "#888" }}>아직 증거물이 없습니다. 회기 중 사진/영상을 첨부해보세요!</div>
+              <div style={{ fontSize: 12, color: "#888" }}>아직 첨부된 활동 사진이 없습니다. 회기 중 사진·영상을 첨부해보세요!</div>
             </div>
           )}
         </div>
@@ -13545,7 +13415,7 @@ function TaskRow({ goal, task, date, calcDayRate, bumpTask, resetTask, setTaskLi
   );
 }
 
-function buildLocalReport({ info, stos, curFields, selFuncs, selStrats, bName, bInter, domAvgs, reinfSchedule, dailyMemos, archiveList }) {
+function buildLocalReport({ info, stos, curFields, selFuncs, selStrats, bName, bInter, domAvgs, reinfSchedule, dailyMemos, archiveList, finalMode = false }) {
   const fn = info.fn || nameWithSuffix(stripSurname(info.name)) || "아동";
   const jEunNeun = (n) => josa은는(n);
   const jIGa = (n) => josa이가(n);
@@ -13848,7 +13718,7 @@ function buildLocalReport({ info, stos, curFields, selFuncs, selStrats, bName, b
     sec1Parts.push(curFields[2]);
   } else if (bName && bName.trim()) {
     const it = bInter && bInter.trim() ? bInter : "기능적 의사소통 훈련(FCT)";
-    sec1Parts.push(`${bName}의 빈도는 중재 시작 이후 줄고 있습니다. ${it}${josa을를(it)} 적용한 뒤 대체 행동이 자발적으로 늘었습니다.${funcTxt ? ` 행동 기능은 ${funcTxt}으로 확인되었고, 그에 맞춰 환경과 강화 전략을 조정하고 있습니다.` : ""}`);
+    sec1Parts.push(`${bName}의 빈도는 중재 시작 이후 줄고 있습니다. ${it}${josa을를(it)} 적용한 뒤 대체 행동이 자발적으로 늘었습니다.${funcTxt ? ` 행동 기능은 ${funcTxt}${josa으로(funcTxt)} 확인되었고, 그에 맞춰 환경과 강화 전략을 조정하고 있습니다.` : ""}`);
   } else {
     sec1Parts.push(`문제행동은 낮은 수준으로 유지되고 있습니다. 교수 상황에서 주의 집중 시간이 늘었고, 활동 전환 시 안정적인 모습입니다.`);
   }
@@ -13864,10 +13734,18 @@ function buildLocalReport({ info, stos, curFields, selFuncs, selStrats, bName, b
     } else if (lastAvg >= 60) {
       sec1Parts.push(`교수 참여도는 ${lastAvg}% 수준이고 조금씩 올라가고 있습니다. 촉구(prompt) 의존도가 줄어 학습 효율이 좋아지고 있습니다.`);
     } else {
-      sec1Parts.push(`지금은 ${fn}의 학습 출발점을 확인하고 기초선을 잡는 단계입니다. ${stratTxt} 등을 통해 단계적으로 진행하고 있습니다.`);
+      if (finalMode) {
+        sec1Parts.push(`${fn}의 학습 출발점과 기초 수준을 확인하는 과정을 거쳐, ${stratTxt} 등을 통해 단계적으로 중재를 진행하였습니다.`);
+      } else {
+        sec1Parts.push(`지금은 ${fn}의 학습 출발점을 확인하고 기초선을 잡는 단계입니다. ${stratTxt} 등을 통해 단계적으로 진행하고 있습니다.`);
+      }
     }
   } else {
-    sec1Parts.push(`교수 참여의 기초선을 잡는 단계입니다. ${fn}의 학습 특성과 선호 강화제를 파악하면서 진행하고 있습니다.`);
+    if (finalMode) {
+      sec1Parts.push(`교수 참여의 기초를 다지는 과정을 거쳐, ${fn}의 학습 특성과 선호 강화제를 파악하며 중재를 진행하였습니다.`);
+    } else {
+      sec1Parts.push(`교수 참여의 기초선을 잡는 단계입니다. ${fn}의 학습 특성과 선호 강화제를 파악하면서 진행하고 있습니다.`);
+    }
   }
 
   const cutoffArchives = (archiveList || []).filter(item => !item.isFinal);
@@ -13891,7 +13769,28 @@ function buildLocalReport({ info, stos, curFields, selFuncs, selStrats, bName, b
     }
   }
 
-  r["종합 현황"] = sec1Parts.join(" ");
+  let sec1Text = sec1Parts.join(" ");
+  if (finalMode) {
+    // ★ [종결보고서] 진행 중(중간보고서) 어투를 종결 시점 과거형으로 변환.
+    //    종결보고서는 치료가 끝난 시점에 작성하므로 "~하고 있습니다"가 아니라 "~했습니다"가 자연스러움.
+    sec1Text = sec1Text
+      .replace(/늘고 있습니다/g, "늘었습니다")
+      .replace(/줄고 있습니다/g, "줄었습니다")
+      .replace(/올라가고 있습니다/g, "올라갔습니다")
+      .replace(/나오고 있고,/g, "나왔고,")
+      .replace(/나오고 있습니다/g, "나왔습니다")
+      .replace(/조정하고 있습니다/g, "조정하였습니다")
+      .replace(/진행하고 있습니다/g, "진행하였습니다")
+      .replace(/형성되고 있습니다/g, "형성되었습니다")
+      .replace(/향상되고 있습니다/g, "향상되었습니다")
+      .replace(/증가하고 있습니다/g, "증가하였습니다")
+      .replace(/진행되고 있습니다/g, "진행되었습니다")
+      .replace(/보이고 있습니다/g, "보였습니다")
+      .replace(/좋아지고 있습니다/g, "좋아졌습니다")
+      .replace(/유지되고 있습니다/g, "유지되었습니다")
+      .replace(/넘어갈 수 있는 수준입니다/g, "넘어갈 수 있는 수준에 도달하였습니다");
+  }
+  r["종합 현황"] = sec1Text;
 
   if (curFields[0] && curFields[0].trim()) r["아동의 현행 상황 – 언어"] = curFields[0];
   if (curFields[1] && curFields[1].trim()) r["아동의 현행 상황 – 사회성"] = curFields[1];
@@ -14162,6 +14061,7 @@ function buildLocalReport({ info, stos, curFields, selFuncs, selStrats, bName, b
 }
 
 function ReportTab({ currentUser, info, goals, currentAvgs, baselineAvgs, domainLevelOverrides, getTimeline, stosForReport, goalsForReport, askConfirm, reportFields, reportSelStrats, reportSelStratsCustom, reportSelPrein, reportSelSrein, reportReinfSchedule, reportBehaviors, reportSections, dailyMemos, setReportField, setReportPatch, setInfo, archiveList, cutoffDisabled, setCutoffDisabled, reportMode, setReportMode, onArchiveSave, onArchiveDelete, onArchiveView, onPrev, onPreview, onPrint }) {
+  const [showReportHelp, setShowReportHelp] = useState(false); // ★ 인쇄 안내 박스 접기 (기본 접힘)
   const visibleArchiveList = useMemo(() => {
     if (!archiveList || archiveList.length === 0) return [];
     if (currentUser?.role === "admin") {
@@ -14263,34 +14163,50 @@ function ReportTab({ currentUser, info, goals, currentAvgs, baselineAvgs, domain
         </span>
       </div>
 
-      {/* ★ 보고서 모드별 안내 — [📄 인쇄] 동작 명확하게 */}
-      {!isFinalMode ? (
-        <div style={{ marginBottom: 12, padding: "10px 14px", background: "#fef0e0", borderLeft: "3px solid #d68b3a", borderRadius: 6, fontSize: 11, color: "#a85020", lineHeight: 1.7 }}>
-          📅 <b>다음 보고 종료일을 선택하세요.</b> 보고 종료일까지의 데이터로 본 보고서가 작성됩니다.<br />
-          <br />
-          <b>[📄 인쇄] 클릭 시 자동으로</b>:<br />
-          &nbsp;&nbsp;✓ 현재 보고서가 보관함에 저장됨<br />
-          &nbsp;&nbsp;✓ 그래프에 컷오프 적용 (이전 데이터는 보관함에서 확인)<br />
-          &nbsp;&nbsp;✓ 다음 차수 시작일이 자동 갱신됨 (보관일 + 1)<br />
-          <br />
-          💡 보관 없이 양식만 확인하려면 <b>[👁 미리보기]</b> 버튼을 사용하세요.
-        </div>
-      ) : (
-        <div style={{ marginBottom: 12, padding: "10px 14px", background: "#eaf3de", borderLeft: "3px solid #5a8c1f", borderRadius: 6, fontSize: 11, color: "#3d6014", lineHeight: 1.7 }}>
-          🎓 <b>종결보고서 작성 모드</b>입니다.<br />
-          <br />
-          종결보고서는 치료 종료 시 작성하는 최종 보고서입니다:<br />
-          &nbsp;&nbsp;✓ <b>전체 치료 기간</b>의 데이터를 모두 표시 (이전 차수 cutoff 무시)<br />
-          &nbsp;&nbsp;✓ '다음 목표' 대신 '<b>권고사항</b>' 섹션<br />
-          <br />
-          <b>[🎓 종결보고서 인쇄] 클릭 시 자동으로</b>:<br />
-          &nbsp;&nbsp;✓ 종결보고서가 보관함에 저장됨 (별도 표시)<br />
-          &nbsp;&nbsp;✓ 그래프 컷오프는 <b>적용되지 않음</b> (전체 데이터 유지)<br />
-          &nbsp;&nbsp;✓ 다음 차수 시작일은 <b>그대로 유지</b><br />
-          <br />
-          💡 보관 없이 양식만 확인하려면 <b>[👁 미리보기]</b> 버튼을 사용하세요.
-        </div>
-      )}
+      {/* ★ 보고서 모드별 안내 — 접이식 한 줄 (자세히 누르면 전체) */}
+      {(() => {
+        const c = isFinalMode
+          ? { bg: "#eaf3de", bar: "#5a8c1f", fg: "#3d6014", line: "🎓 [🎓 종결보고서 인쇄]를 누르면 보관·전체기간 표시가 자동 적용됩니다" }
+          : { bg: "#fef0e0", bar: "#d68b3a", fg: "#a85020", line: "ℹ️ [📄 인쇄]를 누르면 보관·컷오프 적용·시작일 갱신이 자동 진행됩니다" };
+        return (
+          <div style={{ marginBottom: 12, background: c.bg, borderLeft: `3px solid ${c.bar}`, borderRadius: 6, overflow: "hidden" }}>
+            <div
+              role="button" tabIndex={0}
+              onClick={() => setShowReportHelp(v => !v)}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setShowReportHelp(v => !v); } }}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", cursor: "pointer", fontSize: 11, color: c.fg, fontWeight: 500 }}>
+              <span>{c.line}</span>
+              <span style={{ fontSize: 10, whiteSpace: "nowrap", marginLeft: 8 }}>{showReportHelp ? "접기 ▴" : "자세히 ▾"}</span>
+            </div>
+            {showReportHelp && (
+              <div style={{ padding: "0 14px 12px", fontSize: 11, color: c.fg, lineHeight: 1.7 }}>
+                {!isFinalMode ? (
+                  <>
+                    📅 <b>다음 보고 종료일을 선택하세요.</b> 보고 종료일까지의 데이터로 본 보고서가 작성됩니다.<br /><br />
+                    <b>[📄 인쇄] 클릭 시 자동으로</b>:<br />
+                    &nbsp;&nbsp;✓ 현재 보고서가 보관함에 저장됨<br />
+                    &nbsp;&nbsp;✓ 그래프에 컷오프 적용 (이전 데이터는 보관함에서 확인)<br />
+                    &nbsp;&nbsp;✓ 다음 차수 시작일이 자동 갱신됨 (보관일 + 1)<br /><br />
+                    💡 보관 없이 양식만 확인하려면 <b>[👁 미리보기]</b> 버튼을 사용하세요.
+                  </>
+                ) : (
+                  <>
+                    🎓 <b>종결보고서 작성 모드</b>입니다.<br /><br />
+                    종결보고서는 치료 종료 시 작성하는 최종 보고서입니다:<br />
+                    &nbsp;&nbsp;✓ <b>전체 치료 기간</b>의 데이터를 모두 표시 (이전 차수 cutoff 무시)<br />
+                    &nbsp;&nbsp;✓ '다음 목표' 대신 '<b>권고사항</b>' 섹션<br /><br />
+                    <b>[🎓 종결보고서 인쇄] 클릭 시 자동으로</b>:<br />
+                    &nbsp;&nbsp;✓ 종결보고서가 보관함에 저장됨 (별도 표시)<br />
+                    &nbsp;&nbsp;✓ 그래프 컷오프는 <b>적용되지 않음</b> (전체 데이터 유지)<br />
+                    &nbsp;&nbsp;✓ 다음 차수 시작일은 <b>그대로 유지</b><br /><br />
+                    💡 보관 없이 양식만 확인하려면 <b>[👁 미리보기]</b> 버튼을 사용하세요.
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* PDF-2: SUMMARY · 핵심 한 줄 요약 (부모님이 펴자마자 결론 파악) */}
       {(() => {
@@ -14315,7 +14231,7 @@ function ReportTab({ currentUser, info, goals, currentAvgs, baselineAvgs, domain
         );
       })()}
 
-      {/* ★ [v19 신규] 증거물 갤러리 (중간/종결 보고서) */}
+      {/* ★ [v19 신규] 활동 사진 갤러리 (중간/종결 보고서) */}
       {(() => {
         const mediaList = info.mediaList || [];
         const fourMonthsAgo = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -14325,7 +14241,7 @@ function ReportTab({ currentUser, info, goals, currentAvgs, baselineAvgs, domain
         
         return (
           <div style={{ ...CS, background: "#f9f5f7", marginBottom: 18, border: `1px solid ${PKL}` }}>
-            <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, marginBottom: 12, color: PKD }}>📸 평가 증거물 ({recentMedia.length}개)</h3>
+            <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, marginBottom: 12, color: PKD }}>📸 활동 사진 ({recentMedia.length}개)</h3>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 12 }}>
               {recentMedia.map((media) => (
                 <div key={media.id} style={{
@@ -14354,7 +14270,7 @@ function ReportTab({ currentUser, info, goals, currentAvgs, baselineAvgs, domain
               ))}
             </div>
             <div style={{ fontSize: 9, color: "#888", marginTop: 10, fontStyle: "italic" }}>
-              💡 최근 4개월 동안 수집된 평가 증거물입니다. 부모 상담 및 다음 기관 인계 시 참고하세요.
+              💡 최근 4개월 동안 모은 활동 사진입니다. 부모 상담 및 다음 기관 인계 시 참고하세요.
             </div>
           </div>
         );
@@ -14473,15 +14389,9 @@ function ReportTab({ currentUser, info, goals, currentAvgs, baselineAvgs, domain
       {currentAvgs.length > 0 && (
         <div style={CS}>
           <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0, marginBottom: 12, color: PKD }}>영역별 수행 현황</h3>
-          <div className="responsive-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "center" }}>
-            <div>
-              <div style={{ fontSize: 11, color: "#888", marginBottom: 4, textAlign: "center" }}>현재 수행률 (최근 데일리 기록 평균)</div>
-              <RadarChart data={currentAvgs.map(d => ({ ...d, domain: cleanDomainKey(d.domain) }))} />
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: "#888", marginBottom: 4, textAlign: "center" }}>영역별 현재 수행률 (%)</div>
-              <BarChart data={currentAvgs.map(d => ({ ...d, domain: cleanDomainKey(d.domain) }))} />
-            </div>
+          <div>
+            <div style={{ fontSize: 11, color: "#888", marginBottom: 4, textAlign: "center" }}>영역별 현재 수행률 (%)</div>
+            <BarChart data={currentAvgs.map(d => ({ ...d, domain: cleanDomainKey(d.domain) }))} />
           </div>
           <div style={{ marginTop: 10, padding: "8px 12px", background: PKL, borderRadius: 8, fontSize: 11, color: PKD, lineHeight: 1.6 }}>
             💡 이 그래프는 [③ 데일리 데이터]에서 기록한 <b>정반응률의 최근 수치</b>를 영역별로 평균한 것입니다. 데일리 기록이 없는 목표는 기초선 값이 사용됩니다.
@@ -14629,13 +14539,52 @@ function ReportTab({ currentUser, info, goals, currentAvgs, baselineAvgs, domain
             </div>
             <div>
               <label style={{ fontSize: 10.5, color: "#5a8c1f", fontWeight: 500, display: "block", marginBottom: 4 }}>총 예정 회기</label>
-              <input
-                type="number"
-                placeholder="자동 계산"
-                value={info.sTotal || ""}
-                onChange={e => setInfo(prev => ({ ...prev, sTotal: e.target.value }))}
-                style={{ width: "100%", padding: "5px 8px", border: "1px solid #d4e5ba", borderRadius: 6, fontSize: 11.5, fontFamily: "inherit", boxSizing: "border-box" }}
-              />
+              {(() => {
+                const computeAuto = () => {
+                  const start = info.evalStart;
+                  const end = info.finalEndDate || info.evalEnd;
+                  const week = parseInt(info.sWeek, 10);
+                  if (!start || !end || isNaN(week) || week <= 0) return null;
+                  const ds = new Date(start), de = new Date(end);
+                  if (isNaN(ds.getTime()) || isNaN(de.getTime())) return null;
+                  const diffDays = Math.floor((de - ds) / (1000 * 60 * 60 * 24));
+                  if (diffDays < 0) return null;
+                  const weeks = diffDays / 7;
+                  return Math.round(weeks * week);
+                };
+                const autoVal = computeAuto();
+                const userVal = info.sTotal || "";
+                const isAuto = userVal === "" && autoVal !== null;
+                // ★ [버그수정] 자동/수동 토글: 자동 상태에서 칸을 누르면 자동값을 sTotal로 채택해 바로 수정 가능,
+                //    수동 상태에서는 ↺ 버튼으로 다시 자동으로 되돌릴 수 있게 함 (항상 표시).
+                return (
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type="text"
+                      placeholder={autoVal !== null ? `자동: ${autoVal}` : "자동 계산"}
+                      value={isAuto ? String(autoVal) : userVal}
+                      onFocus={() => {
+                        // 자동 상태에서 포커스되면 자동값을 채택 → 수동 편집 가능
+                        if (isAuto) setInfo(prev => ({ ...prev, sTotal: String(autoVal) }));
+                      }}
+                      onChange={e => setInfo(prev => ({ ...prev, sTotal: e.target.value }))}
+                      title={isAuto ? "자동 계산값 (치료 시작/종료일과 주 N회로부터 산출). 칸을 누르면 직접 수정할 수 있습니다." : "직접 입력된 값입니다. ↺ 버튼으로 자동 계산으로 되돌릴 수 있습니다."}
+                      style={{
+                        width: "100%", padding: "5px 8px", paddingRight: (!isAuto && autoVal !== null) ? 26 : 8, border: "1px solid #d4e5ba", borderRadius: 6, fontSize: 11.5, fontFamily: "inherit", boxSizing: "border-box",
+                        ...(isAuto ? { color: "#a87108", background: "#fffaf0" } : {})
+                      }}
+                    />
+                    {!isAuto && autoVal !== null && (
+                      <button
+                        onClick={() => setInfo(prev => ({ ...prev, sTotal: "" }))}
+                        title={`자동 계산값(${autoVal})으로 되돌리기`}
+                        style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#a87108", fontSize: 12, cursor: "pointer", padding: "2px 4px", fontFamily: "inherit" }}>
+                        ↺
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -15417,12 +15366,15 @@ function ReportTab({ currentUser, info, goals, currentAvgs, baselineAvgs, domain
       {/* 액션 */}
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18, gap: 8 }}>
         <button style={BS} onClick={onPrev}>← 데일리 데이터</button>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {onPreview && (
             <button style={{ ...BS, background: "#fff", border: "1px solid #b9d4ee", color: "#1d4d80", fontWeight: 600 }} onClick={onPreview} title="보관 없이 인쇄 양식만 미리보기 (데이터에 영향 없음)">👁 미리보기 (보관 안 함)</button>
           )}
-          <button style={isFinalMode ? { ...BP, background: "#5a8c1f" } : BP} onClick={onPrint}>
-            {isFinalMode ? "🎓 종결보고서 양식으로 인쇄하기" : "📄 중간보고서 양식으로 인쇄하기"}
+          <button style={isFinalMode ? { ...BP, background: "#5a8c1f" } : BP} onClick={() => onPrint && onPrint("print")} title="보관 후 인쇄 대화상자가 바로 열립니다">
+            🖨️ 인쇄
+          </button>
+          <button style={isFinalMode ? { ...BP, background: "#5a8c1f" } : BP} onClick={() => onPrint && onPrint("pdf")} title="보관 후 PDF 저장 화면이 바로 열립니다">
+            📄 PDF로 저장
           </button>
         </div>
       </div>
@@ -15807,7 +15759,8 @@ function ReportGeneratorSection({
         domAvgs: domAvgs || [],
         reinfSchedule: reportReinfSchedule || "",
         dailyMemos: dailyMemos || {},
-        archiveList: archiveList || []
+        archiveList: archiveList || [],
+        finalMode: reportMode === "final"
       });
       const meta = result.__meta;
       const sectionsOnly = { ...result };
@@ -15870,7 +15823,7 @@ function ReportGeneratorSection({
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>검단ABA 중간보고서 - ${info.name || "아동"}</title>
+<title>검단ABA ${reportMode === "final" ? "종결보고서" : "중간보고서"} - ${info.name || "아동"}</title>
 <style>
   @page { size: A4; margin: 16mm; }
   body { font-family: "Malgun Gothic", -apple-system, sans-serif; max-width: 760px; margin: 0 auto; padding: 20px; color: #333; }
@@ -15933,7 +15886,7 @@ function ReportGeneratorSection({
 
     const a = document.createElement("a");
     a.href = url;
-    a.download = `검단ABA_중간보고서_${info.name || "아동"}_${today}.html`;
+    a.download = `검단ABA_${reportMode === "final" ? "종결보고서" : "중간보고서"}_${info.name || "아동"}_${today}.html`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -16099,24 +16052,28 @@ function ReportGeneratorSection({
               const autoVal = computeAuto();
               const userVal = info.sTotal || "";
               const isAuto = userVal === "" && autoVal !== null;
+              // ★ [버그수정] 자동/수동 토글: 자동 상태에서 칸을 누르면 자동값을 채택해 바로 수정 가능
               return (
                 <div style={{ position: "relative" }}>
                   <input
                     type="text"
                     placeholder={autoVal !== null ? `자동: ${autoVal}` : "예: 24"}
                     style={{
-                      ...IS, padding: "5px 8px", fontSize: 11.5,
+                      ...IS, padding: "5px 8px", paddingRight: (!isAuto && autoVal !== null) ? 26 : 8, fontSize: 11.5,
                       ...(isAuto ? { color: "#a87108", background: "#fffaf0" } : {})
                     }}
                     value={isAuto ? String(autoVal) : userVal}
+                    onFocus={() => {
+                      if (isAuto) setInfo(prev => ({ ...prev, sTotal: String(autoVal) }));
+                    }}
                     onChange={e => setInfo(prev => ({ ...prev, sTotal: e.target.value }))}
-                    title={isAuto ? "자동 계산값 (보고 시작/종료일과 주 N회로부터 산출). 직접 수정하면 그 값이 유지됩니다." : ""}
+                    title={isAuto ? "자동 계산값 (보고 시작/종료일과 주 N회로부터 산출). 칸을 누르면 직접 수정할 수 있습니다." : "직접 입력된 값입니다. ↺ 버튼으로 자동 계산으로 되돌릴 수 있습니다."}
                   />
-                  {!isAuto && userVal !== "" && autoVal !== null && Number(userVal) !== autoVal && (
+                  {!isAuto && autoVal !== null && (
                     <button
                       onClick={() => setInfo(prev => ({ ...prev, sTotal: "" }))}
-                      title={`자동값(${autoVal})으로 되돌리기`}
-                      style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#a87108", fontSize: 10, cursor: "pointer", padding: "2px 4px", fontFamily: "inherit" }}>
+                      title={`자동 계산값(${autoVal})으로 되돌리기`}
+                      style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "#a87108", fontSize: 12, cursor: "pointer", padding: "2px 4px", fontFamily: "inherit" }}>
                       ↺
                     </button>
                   )}
@@ -16341,18 +16298,7 @@ function ReportGeneratorSection({
           onClick={handleGenerate} disabled={loading}>
           {loading ? "⏳ 생성 중..." : (hasReport ? "🔄 보고서 다시 생성" : "📝 보고서 자동 생성")}
         </button>
-        {hasReport && (
-          <button style={{ ...BP, padding: "10px 18px", fontSize: 12, fontWeight: 700, background: "#5a8c1f" }}
-            onClick={() => handleDownloadHtml("print")}>
-            🖨️ 바로 인쇄
-          </button>
-        )}
-        {hasReport && (
-          <button style={{ ...BS, padding: "10px 18px", fontSize: 12, fontWeight: 600 }}
-            onClick={() => handleDownloadHtml("download")}>
-            💾 HTML 다운로드
-          </button>
-        )}
+        {/* ★ [구형 제거] 🖨️바로 인쇄 / 💾HTML 다운로드 버튼 삭제 — 인쇄/PDF저장은 아래 [양식으로 인쇄하기] → 미리보기 화면에서 처리 */}
         {hasReport && (
           <button style={{ ...BS, padding: "10px 14px", fontSize: 12 }}
             onClick={() => setExpanded(e => !e)}>
