@@ -848,7 +848,7 @@ function buildRecommendations(selected, info) {
     "유치원·학교 입학 후 적응 모니터링": { cat: "transition", desc: `유치원·학교 등 새 환경에 입학한 뒤 적응 과정을 살펴봐 주시기를 권합니다. 초기 적응 시기의 어려움은 일찍 개입할수록 효과적입니다` },
     "일반화·유지 위한 재평가":     { cat: "monitor",    desc: `학습 기술의 일반화와 유지 상태를 확인하기 위해 약 6개월 후 재평가를 받아보시기를 권합니다. 객관적인 평가로 다음 단계를 잡아갈 수 있습니다` },
     "가정 내 행동지원 지속":       { cat: "family",     desc: `종결 후에도 가정에서 일관된 행동지원을 이어가 주시는 게 중요합니다. 본 보고서의 가정 유지 방안을 참고하셔서 ${fn}의 발달이 끊기지 않도록 지원해 주세요` },
-    "또래 상호작용 기회 확대 권고": { cat: "family",     desc: `또래와의 상호작용 기회를 늘려 주시기를 권합니다. 놀이터·소그룹 활동·또래 만남을 통해 ${fn}이(가) 사회적 기술을 일상에서 연습할 수 있도록 도와주세요` },
+    "또래 상호작용 기회 확대 권고": { cat: "family",     desc: `또래와의 상호작용 기회를 늘려 주시기를 권합니다. 놀이터·소그룹 활동·또래 만남을 통해 ${fn}${josa이가(fn)} 사회적 기술을 일상에서 연습할 수 있도록 도와주세요` },
     "필요 시 BCBA 컨설팅 재개":    { cat: "monitor",    desc: `도전 행동이 다시 늘거나 학습한 기술이 퇴행하는 모습이 보이면, 가능한 빨리 BCBA(행동분석전문가) 컨설팅을 의뢰해 주세요` }
   };
 
@@ -1450,7 +1450,7 @@ function buildHomeMaintenance(selected, info) {
     "도전 행동 발생 시 무관심 후 대안 행동 강화": { cat: "regression", desc: `도전 행동이 다시 나올 때는 그 행동에 바로 반응하지 마시고, ${fn}${이가(fn)} 적절한 대체 행동을 보일 때 바로 칭찬과 관심을 주세요` },
     "정기적 부모 모니터링":       { cat: "monitor",        desc: `주 1회 정도 ${fn}의 행동과 학습 기술 유지 상태를 짧게 점검하고 메모로 남겨 주세요. 작은 변화도 기록해 두시면 다음 단계 검토에 도움이 됩니다` },
     "퇴행 시 즉시 ABA 치료 재개 검토": { cat: "regression", desc: `일정 기간 이상 학습한 기술이 퇴행하거나 새 도전 행동이 늘어나면, 가능한 빨리 ABA 치료 재개나 컨설팅을 검토해 주세요. 일찍 개입하는 게 효과적입니다` },
-    "또래 상호작용 기회 정기 마련": { cat: "social",        desc: `놀이터·또래 만남·소그룹 활동 같은 기회를 정기적으로 만들어 주시면 사회적 기술 발달에 도움이 됩니다. ${fn}이(가) 또래 안에서 어울리도록 격려해 주세요` },
+    "또래 상호작용 기회 정기 마련": { cat: "social",        desc: `놀이터·또래 만남·소그룹 활동 같은 기회를 정기적으로 만들어 주시면 사회적 기술 발달에 도움이 됩니다. ${fn}${josa이가(fn)} 또래 안에서 어울리도록 격려해 주세요` },
     "시각적 일정표·사진 단서 활용": { cat: "routine",        desc: `필요하시면 시각적 일정표나 사진 단서를 활용해 주세요. ${fn}${이가(fn)} 다음에 일어날 일을 예측하고 전환 상황에 적응하는 데 도움이 됩니다` }
   };
 
@@ -13893,8 +13893,8 @@ function buildLocalReport({ info, stos, curFields, selFuncs, selStrats, bName, b
 
   if (allCompleted) {
     const masteredText = masteredDomains.length > 0
-      ? ` 특히 ${masteredDomains.slice(0, 2).map(d => `'${d.domain}'`).join(", ")} 영역이 숙달 수준입니다.`
-      : (best.domain !== "—" ? ` '${best.domain}' 영역은 평균 ${best.avg}%로 숙달 수준입니다.` : "");
+      ? ` 특히 ${masteredDomains.slice(0, 2).map(d => `'${cleanDomainKey(d.domain)}'`).join(", ")} 영역이 숙달 수준입니다.`
+      : (best.domain !== "—" ? ` '${cleanDomainKey(best.domain)}' 영역은 평균 ${best.avg}%로 숙달 수준입니다.` : "");
     sec2Parts.push(`${fn}${jEunNeun(fn)} 이번 기간에 설정된 ${total}개 단기 목표(STO) 전체에서 '2회 연속 80% 이상' 준거를 달성했습니다. 학습한 기술이 안정적으로 유지되고 있습니다.${masteredText} 일반화 단계로 넘어갈 차례입니다.`);
   } else if (topGrowth.length >= 2) {
     const g1 = topGrowth[0], g2 = topGrowth[1];
@@ -13903,12 +13903,12 @@ function buildLocalReport({ info, stos, curFields, selFuncs, selStrats, bName, b
     const doneText = done.length > 0 ? ` 전체 ${total}개 STO 중 ${done.length}개에서 준거를 달성했습니다.` : "";
     const accelText = acceleratingTrend ? " 최근 회기에서 더 빠르게 올라가고 있습니다." : "";
     const masteredTail = masteredDomains.length > 0
-      ? ` ${masteredDomains.map(d => `'${d.domain}'`).join(", ")} 영역은 숙달 수준이라 일반화 단계로 넘어갈 차례입니다.`
+      ? ` ${masteredDomains.map(d => `'${cleanDomainKey(d.domain)}'`).join(", ")} 영역은 숙달 수준이라 일반화 단계로 넘어갈 차례입니다.`
       : "";
     sec2Parts.push(`이번 기간에 ${desc1}, ${desc2}.${doneText}${accelText}${masteredTail}`);
   } else if (overallDiff >= 10) {
     const masteredTail = masteredDomains.length > 0
-      ? ` ${masteredDomains.slice(0, 2).map(d => `'${d.domain}'`).join(", ")} 영역은 숙달 수준이라 일반화 단계로 넘어갈 차례입니다.`
+      ? ` ${masteredDomains.slice(0, 2).map(d => `'${cleanDomainKey(d.domain)}'`).join(", ")} 영역은 숙달 수준이라 일반화 단계로 넘어갈 차례입니다.`
       : "";
     sec2Parts.push(`${fn}${jEunNeun(fn)} 이번 기간에 평균 점수가 ${firstAvg}%에서 ${lastAvg}%로 +${overallDiff}%p 올랐습니다.${done.length > 0 ? ` ${done.length}개 목표에서 준거를 달성했습니다.` : ""}${masteredTail}`);
   } else if (recentMastery.length > 0) {
@@ -13928,7 +13928,7 @@ function buildLocalReport({ info, stos, curFields, selFuncs, selStrats, bName, b
     const positiveTrends = top.filter(d => d.perWeek > 0);
     if (positiveTrends.length > 0) {
       const trendTxt = positiveTrends
-        .map(d => `'${d.domain}' 주당 평균 ${d.perWeek > 0 ? "+" : ""}${d.perWeek}%p`)
+        .map(d => `'${cleanDomainKey(d.domain)}' 주당 평균 ${d.perWeek > 0 ? "+" : ""}${d.perWeek}%p`)
         .join(", ");
       sec2Parts.push(`주간 변화율을 보면 ${weeklyTrend.weeks}주 동안 ${trendTxt}으로 올라갔습니다.`);
     }
@@ -14028,13 +14028,13 @@ function buildLocalReport({ info, stos, curFields, selFuncs, selStrats, bName, b
 
   const homeMissions = [];
   if (best.domain !== "—" && best.avg >= 70) {
-    homeMissions.push(`${fn}의 강점 영역인 '${best.domain}'${josa을를(best.domain)} 가정에서도 활용하기. ${fn}${jIGa(fn)} 좋아하는 간식이나 장난감을 줄 때 바로 주지 마시고, 눈을 보며 3초 기다려 주세요. 시선, 손짓, 말로 표현이 나오면 그때 주시면 됩니다. 요구하기(Mand)가 자연스럽게 강화됩니다.`);
+    homeMissions.push(`${fn}의 강점 영역인 '${cleanDomainKey(best.domain)}'${josa을를(best.domain)} 가정에서도 활용하기. ${fn}${jIGa(fn)} 좋아하는 간식이나 장난감을 줄 때 바로 주지 마시고, 눈을 보며 3초 기다려 주세요. 시선, 손짓, 말로 표현이 나오면 그때 주시면 됩니다. 요구하기(Mand)가 자연스럽게 강화됩니다.`);
   }
   if (worst.domain !== "—" && worst.avg < 60 && worst.avg !== 0) {
-    homeMissions.push(`'${worst.domain}' 영역의 기초 다지기를 가정에서도 함께. 짧은 지시(앉아, 와, 줘)를 일상에서 써 주세요. 잘 따라했을 때 바로 칭찬하시고, ${fn}${jIGa(fn)} 좋아하는 활동으로 강화해 주시면 됩니다.`);
+    homeMissions.push(`'${cleanDomainKey(worst.domain)}' 영역의 기초 다지기를 가정에서도 함께. 짧은 지시(앉아, 와, 줘)를 일상에서 써 주세요. 잘 따라했을 때 바로 칭찬하시고, ${fn}${jIGa(fn)} 좋아하는 활동으로 강화해 주시면 됩니다.`);
   }
   if (homeMissions.length === 0) {
-    homeMissions.push(`${fn}이(가) 스스로 표현할 기회를 늘려 주세요. 좋아하는 물건이나 활동을 바로 주지 마시고, 잠깐 기다려 시선이나 몸짓, 소리, 말 어떤 형태든 표현이 나오면 그때 반응해 주세요.`);
+    homeMissions.push(`${fn}${josa이가(fn)} 스스로 표현할 기회를 늘려 주세요. 좋아하는 물건이나 활동을 바로 주지 마시고, 잠깐 기다려 시선이나 몸짓, 소리, 말 어떤 형태든 표현이 나오면 그때 반응해 주세요.`);
   }
 
   const dailyTips = [
@@ -14047,22 +14047,22 @@ function buildLocalReport({ info, stos, curFields, selFuncs, selStrats, bName, b
   if (bName && bName.trim()) {
     const bn = bName.trim();
     if (funcs.includes("escape")) {
-      cautions.push(`${fn}이(가) '${bn}' 행동을 할 때 과제를 바로 중단하시면 회피(escape) 기능이 강화돼서 행동이 더 자주 나옵니다. 과제를 더 작게 나눠 짧게라도 끝낸 다음 휴식을 주세요. "다 했어, 잘했어"라고 짧게 칭찬하시고 휴식 시간을 주시면 됩니다.`);
+      cautions.push(`${fn}${josa이가(fn)} '${bn}' 행동을 할 때 과제를 바로 중단하시면 회피(escape) 기능이 강화돼서 행동이 더 자주 나옵니다. 과제를 더 작게 나눠 짧게라도 끝낸 다음 휴식을 주세요. "다 했어, 잘했어"라고 짧게 칭찬하시고 휴식 시간을 주시면 됩니다.`);
     }
     if (funcs.includes("attention")) {
-      cautions.push(`${fn}이(가) '${bn}' 행동을 할 때 바로 반응(혼내기, 달래기, 시선 주기)하시면 관심 획득(attention) 기능이 강화됩니다. 안전한 상황이라면 그 행동에는 시선과 말을 줄이시고, 적절한 방법(이름 부르기, 손 들기, 어깨 두드리기 등)으로 관심을 요청할 때 바로 반응해 주세요.`);
+      cautions.push(`${fn}${josa이가(fn)} '${bn}' 행동을 할 때 바로 반응(혼내기, 달래기, 시선 주기)하시면 관심 획득(attention) 기능이 강화됩니다. 안전한 상황이라면 그 행동에는 시선과 말을 줄이시고, 적절한 방법(이름 부르기, 손 들기, 어깨 두드리기 등)으로 관심을 요청할 때 바로 반응해 주세요.`);
     }
     if (funcs.includes("sensory")) {
       cautions.push(`'${bn}' 행동이 자기자극(감각) 기능일 때는 못 하게 막는 것보다 같은 감각을 채워줄 수 있는 대체 활동을 주는 게 효과적입니다. 손으로 두드리는 행동이면 촉감 장난감이나 찰흙, 몸을 흔드는 행동이면 그네나 트램펄린을 일과 중에 넣어 주세요.`);
     }
     if (funcs.includes("access")) {
-      cautions.push(`${fn}이(가) 원하는 걸 얻으려고 '${bn}' 행동을 할 때 그걸 들어주시면 그 행동이 의사소통 수단으로 학습됩니다. 적절한 표현(가리키기, 사인, 그림 카드, 단어 등)을 사용할 때 바로 원하는 걸 주시면 됩니다.`);
+      cautions.push(`${fn}${josa이가(fn)} 원하는 걸 얻으려고 '${bn}' 행동을 할 때 그걸 들어주시면 그 행동이 의사소통 수단으로 학습됩니다. 적절한 표현(가리키기, 사인, 그림 카드, 단어 등)을 사용할 때 바로 원하는 걸 주시면 됩니다.`);
     }
     if (funcs.length === 0) {
-      cautions.push(`${fn}이(가) '${bn}' 행동을 할 때 바로 반응(들어주기, 혼내기, 달래기)하시면 의도와 다르게 그 행동이 강화될 수 있습니다. 적절한 표현이 나올 때만 반응하시고, '${bn}' 행동에는 중립적으로 대해 주세요.`);
+      cautions.push(`${fn}${josa이가(fn)} '${bn}' 행동을 할 때 바로 반응(들어주기, 혼내기, 달래기)하시면 의도와 다르게 그 행동이 강화될 수 있습니다. 적절한 표현이 나올 때만 반응하시고, '${bn}' 행동에는 중립적으로 대해 주세요.`);
     }
   } else {
-    cautions.push(`강화제는 ${fn}이(가) 적절한 행동을 한 직후(3초 이내)에 주셔야 효과적입니다. 늦으면 어떤 행동이 강화되는지 ${fn}이(가) 연결하기 어렵습니다.`);
+    cautions.push(`강화제는 ${fn}${josa이가(fn)} 적절한 행동을 한 직후(3초 이내)에 주셔야 효과적입니다. 늦으면 어떤 행동이 강화되는지 ${fn}${josa이가(fn)} 연결하기 어렵습니다.`);
   }
   if (reinfStage === "continuous") {
     cautions.push(`지금 ${fn}의 강화 스케줄은 연속 강화(매번 강화) 단계입니다. 가정에서도 적절한 행동을 할 때마다 강화해 주세요. 학습이 안정되기 전에 띄엄띄엄 강화하면 행동 빈도가 줄어듭니다.`);
@@ -14082,12 +14082,12 @@ function buildLocalReport({ info, stos, curFields, selFuncs, selStrats, bName, b
   const bestSto = stableMasteredList[0] || recentMastery[0];
   const bestDomain = best.domain !== "—" && best.avg >= 70 ? best.domain : null;
   if (bestSto || bestDomain) {
-    const refName = bestSto ? (bestSto.name || bestSto.domain || "강점 영역") : bestDomain;
+    const refName = bestSto ? (bestSto.name || cleanDomainKey(bestSto.domain) || "강점 영역") : cleanDomainKey(bestDomain);
     const refSuffix = bestDomain && best.avg > 0 ? `(평균 ${best.avg}%)` : "";
     const refFull = `'${refName}' 영역${refSuffix}`;
     const lastChar = refSuffix ? refSuffix.slice(-1) : refName.slice(-1);
     const particle = withParticle(lastChar, "을", "를");
-    sentences.push(`${fn}이(가) 잘하는 ${refFull}${particle} 동기 유발 도구로 활용해 학습을 통합적으로 진행할 계획입니다.`);
+    sentences.push(`${fn}${josa이가(fn)} 잘하는 ${refFull}${particle} 동기 유발 도구로 활용해 학습을 통합적으로 진행할 계획입니다.`);
   } else {
     sentences.push(`${fn}의 현재 발달 단계에 맞춰 개별화된 학습 목표를 운영하고, 데이터를 보면서 효과를 확인할 예정입니다.`);
   }
@@ -14096,15 +14096,15 @@ function buildLocalReport({ info, stos, curFields, selFuncs, selStrats, bName, b
   const emerging = domAvgs.filter(d => d.avg >= 40 && d.avg < 60);
   if (focusList.length > 0) {
     const tgt = focusList[0];
-    sentences.push(`'${tgt.domain}' 영역(${tgt.avg}%)은 ${lvl(tgt.avg)} 촉구(prompt)를 단계적으로 줄이고 시도 횟수를 조정해서 숙달 수준에 닿게 할 예정입니다.`);
+    sentences.push(`'${cleanDomainKey(tgt.domain)}' 영역(${tgt.avg}%)은 ${lvl(tgt.avg)} 촉구(prompt)를 단계적으로 줄이고 시도 횟수를 조정해서 숙달 수준에 닿게 할 예정입니다.`);
   } else if (emerging.length > 0) {
     const tgt = emerging[0];
-    sentences.push(`'${tgt.domain}' 영역은 ${lvl(tgt.avg)} 시도 횟수를 늘리고 촉구(prompt)를 조정해 숙달 수준까지 끌어올릴 계획입니다.`);
+    sentences.push(`'${cleanDomainKey(tgt.domain)}' 영역은 ${lvl(tgt.avg)} 시도 횟수를 늘리고 촉구(prompt)를 조정해 숙달 수준까지 끌어올릴 계획입니다.`);
   }
 
   if (worst.domain !== "—" && worst.avg < 60 && worst.avg !== 0) {
     const linkPhrase = bestSto || bestDomain ? `강점 영역의 동기를 활용해서, ` : "";
-    sentences.push(`${linkPhrase}'${worst.domain}' 영역은 ${fn}의 발달 단계에 맞춰 과제를 더 작게 나누고, 행동 형성(Shaping)으로 단계적으로 올리겠습니다.`);
+    sentences.push(`${linkPhrase}'${cleanDomainKey(worst.domain)}' 영역은 ${fn}의 발달 단계에 맞춰 과제를 더 작게 나누고, 행동 형성(Shaping)으로 단계적으로 올리겠습니다.`);
     sentences.push(`VB-MAPP 장벽 평가(Barriers Assessment)로 학습을 막는 요인을 점검하고 단계별로 다루겠습니다.`);
   }
 
@@ -16983,18 +16983,21 @@ function GoalDashboard({ stos }) {
         {/* ★ list 경계선 + L1/L2/L3 라벨 */}
         {listBoundaries && listBoundaries.map((b, i) => {
           const x = coords[b.atIndex] ? coords[b.atIndex].x : padX;
+          // 라벨이 오른쪽 끝에 너무 가까우면 끝 정렬(안쪽으로), 아니면 시작 정렬
+          const nearRight = x > W - padX - 16;
+          const isFirst = i === 0;
           return (
             <g key={i}>
               {i > 0 && (
                 <line x1={x} y1={padTop} x2={x} y2={H - padBottom} stroke="#bbb" strokeWidth="1" strokeDasharray="3,2" opacity="0.7" />
               )}
               <text
-                x={i === 0 ? padX + 2 : x + 2}
+                x={isFirst ? padX + 2 : (nearRight ? x - 2 : x + 2)}
                 y={padTop - 6}
                 fontSize="8.5"
                 fill="#888"
                 fontWeight="700"
-                textAnchor={i === 0 ? "start" : "start"}>
+                textAnchor={isFirst ? "start" : (nearRight ? "end" : "start")}>
                 {b.listLabel}
               </text>
             </g>
