@@ -22,7 +22,7 @@ function _currentOwner() {
     const raw = localStorage.getItem("gd-aba-current-user");
     if (!raw) return "__nobody__";
     const u = JSON.parse(raw);
-    return (u && u.name) ? u.name : "__nobody__";
+    return (u && u.name) ? u.name : "__noboday__";
   } catch (e) {
     return "__nobody__";
   }
@@ -3235,9 +3235,8 @@ function AuthScreen({ view, message, onSetupAdmin, onLogin }) {
           <div style={{
             width: 64, height: 64, margin: "0 auto 14px",
             borderRadius: 16, background: PKL, border: `2px solid ${PK}`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 18, fontWeight: 700, color: PKD, letterSpacing: "-1px"
-          }}>ABA</div>
+            display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden"
+          }}><img src={LOGO_B64} alt="검단ABA언어행동연구소 로고" style={{ width: "82%", height: "82%", objectFit: "contain" }} /></div>
           <div style={{ fontSize: 18, fontWeight: 700, color: "#333", marginBottom: 4 }}>
             검단ABA언어행동연구소
           </div>
@@ -5498,7 +5497,7 @@ export default function App() {
     return (
       <div style={{ fontFamily: "'Pretendard','Noto Sans KR','Malgun Gothic',sans-serif", background: "linear-gradient(135deg,#fdf8f9 0%,#fff 50%,#fdf8f9 100%)", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: PKD }}>
         <div style={{ textAlign: "center" }}>
-          <div style={{ width: 54, height: 54, margin: "0 auto 12px", borderRadius: 14, background: PKL, border: `2px solid ${PK}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: PKD }}>ABA</div>
+          <div style={{ width: 54, height: 54, margin: "0 auto 12px", borderRadius: 14, background: PKL, border: `2px solid ${PK}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}><img src={LOGO_B64} alt="검단ABA언어행동연구소 로고" style={{ width: "82%", height: "82%", objectFit: "contain" }} /></div>
           <div style={{ fontSize: 13, color: "#767676" }}>데이터를 불러오는 중...</div>
         </div>
       </div>
@@ -5848,7 +5847,9 @@ export default function App() {
         {/* 헤더 */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, paddingBottom: 14, borderBottom: `2px solid ${PK}`, flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 54, height: 54, borderRadius: 14, background: PKL, border: `2px solid ${PK}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: PKD, letterSpacing: "-1px" }}>ABA</div>
+            <div style={{ width: 54, height: 54, borderRadius: 14, background: PKL, border: `2px solid ${PK}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+              <img src={LOGO_B64} alt="검단ABA언어행동연구소 로고" style={{ width: "82%", height: "82%", objectFit: "contain" }} />
+            </div>
             <div>
               <div style={{ fontSize: 21, fontWeight: 700, color: "#333", letterSpacing: "-0.5px" }}>검단ABA 통합 매니지먼트 시스템</div>
               <div style={{ fontSize: 12, color: "#767676", marginTop: 2 }}>
